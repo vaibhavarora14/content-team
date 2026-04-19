@@ -84,7 +84,7 @@ export function GeneratePage() {
     setScripts([])
     setRunId('')
     setSteps(createInitialSteps())
-    setIsStepsExpanded(true)
+    setIsStepsExpanded(false)
 
     type FlowStage = 'search' | 'scrape' | 'topics' | 'scripts' | 'enrich'
     let stage: FlowStage = 'search'
