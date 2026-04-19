@@ -56,6 +56,17 @@ export const createRun = (input: {
 
 export const getRun = (id: string) => getStore().get(id)
 
+export const listRuns = () =>
+  [...getStore().values()]
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((run) => ({
+      id: run.id,
+      brandBrief: run.brandBrief,
+      status: run.status,
+      createdAt: run.createdAt,
+      scriptCount: run.videoScripts.length,
+    }))
+
 export const setRunStatus = (id: string, status: string) => {
   const run = getRun(id)
   if (run) {
