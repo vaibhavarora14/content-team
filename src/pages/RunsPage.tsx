@@ -56,7 +56,7 @@ export function RunsPage() {
     setStatusText('Loading run snapshot...')
 
     try {
-      const response = await fetch(`${apiBase}/api/runs/${nextRunId}`)
+      const response = await fetch(`${apiBase}/api/runs/get?runId=${encodeURIComponent(nextRunId)}`)
       if (!response.ok) {
         throw new Error(`Request failed with ${response.status}`)
       }

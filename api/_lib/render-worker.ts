@@ -53,6 +53,19 @@ const getWorkerHeaders = () => ({
     : {}),
 })
 
+const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController()
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeoutHandle)
+  }
+}
+
 const mapWorkerStatus = (value: string | undefined): VideoJobStatus => {
   const normalized = (value ?? '').trim().toLowerCase()
   if (normalized === 'done' || normalized === 'success' || normalized === 'completed') {
@@ -79,7 +92,9 @@ export const createRenderVideoJob = async (
   const createUrl = `${normalizeBaseUrl(baseUrl, baseUrl)}/jobs`
 
   try {
-    const response = await fetch(createUrl, {
+    const response = await fetchWithTimeout(
+      createUrl,
+      {
       method: 'POST',
       headers: getWorkerHeaders(),
       body: JSON.stringify({
@@ -88,7 +103,9 @@ export const createRenderVideoJob = async (
         script: firstScript,
         scriptText: buildNarrationScript(firstScript),
       }),
-    })
+      },
+      15000
+    )
 
     const payload = (await response.json().catch(() => null)) as WorkerCreateResponse | null
     if (!response.ok) {
@@ -134,10 +151,14 @@ export const getRenderVideoJobStatus = async (
   const statusUrl = `${normalizeBaseUrl(baseUrl, baseUrl)}/jobs/${encodeURIComponent(jobId)}`
 
   try {
-    const response = await fetch(statusUrl, {
-      method: 'GET',
-      headers: getWorkerHeaders(),
-    })
+    const response = await fetchWithTimeout(
+      statusUrl,
+      {
+        method: 'GET',
+        headers: getWorkerHeaders(),
+      },
+      12000
+    )
 
     const payload = (await response.json().catch(() => null)) as WorkerStatusResponse | null
     if (!response.ok) {
