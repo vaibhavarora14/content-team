@@ -111,7 +111,11 @@ export function RunsPage() {
           }
         })
       )
-      setStatusText(`Loaded run ${payload.run.id}.`)
+      if (!payload.enrichment) {
+        setStatusText(`Loaded run ${payload.run.id}. Enrichment has not been stored yet.`)
+      } else {
+        setStatusText(`Loaded run ${payload.run.id}.`)
+      }
     } catch (error) {
       setStatusText(error instanceof Error ? error.message : 'Run load failed.')
     } finally {

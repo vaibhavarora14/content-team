@@ -19,6 +19,20 @@ type EnrichmentPayload = {
   firstScriptVideo: FirstScriptVideo
 }
 
+const SUPABASE_TIMEOUT_MS = 4000
+
+type SupabaseResponse = {
+  data?: any
+  error?: {
+    message?: string
+  } | null
+}
+
+type PersistedLookup =
+  | { kind: 'found'; payload: EnrichmentPayload }
+  | { kind: 'missing' }
+  | { kind: 'unavailable'; reason: string }
+
 const withTimeout = async <T>(
   task: PromiseLike<T>,
   timeoutMs: number,
@@ -48,10 +62,13 @@ const getRunIdFromRequest = (request: Request) => {
   return (url.searchParams.get('runId') ?? '').trim()
 }
 
-const maybePersistEnrichment = async (runId: string, payload: EnrichmentPayload) => {
+const maybePersistEnrichment = async (
+  runId: string,
+  payload: EnrichmentPayload
+): Promise<{ ok: true } | { ok: false; reason: string }> => {
   try {
     const supabase = getSupabaseAdmin()
-    await withTimeoutOrNull(
+    const response = (await withTimeoutOrNull(
       supabase.from('run_enrichments').upsert(
         {
           run_id: runId,
@@ -64,10 +81,23 @@ const maybePersistEnrichment = async (runId: string, payload: EnrichmentPayload)
         },
         { onConflict: 'run_id' }
       ),
-      4000
-    )
-  } catch {
-    // Enrichment storage can be unavailable in local/dev.
+      SUPABASE_TIMEOUT_MS
+    )) as SupabaseResponse | null
+
+    if (!response) {
+      return { ok: false, reason: 'Timed out persisting enrichment status.' }
+    }
+
+    if (response.error) {
+      return { ok: false, reason: response.error.message ?? 'Failed persisting enrichment status.' }
+    }
+
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : 'Enrichment storage unavailable.',
+    }
   }
 }
 
@@ -83,8 +113,8 @@ const refreshVideoStatus = async (payload: EnrichmentPayload): Promise<Enrichmen
       ...payload,
       firstScriptVideo: {
         ...current,
-        status: 'failed',
-        error: statusResult.error,
+        status: current.status === 'queued' || current.status === 'processing' ? current.status : 'processing',
+        error: `Worker status unavailable: ${statusResult.error}`,
       },
     }
   }
@@ -97,6 +127,46 @@ const refreshVideoStatus = async (payload: EnrichmentPayload): Promise<Enrichmen
       publicUrl: statusResult.publicUrl ?? current.publicUrl,
       error: statusResult.error,
     },
+  }
+}
+
+const getPersistedEnrichment = async (runId: string): Promise<PersistedLookup> => {
+  try {
+    const supabase = getSupabaseAdmin()
+    const response = (await withTimeoutOrNull(
+      supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
+      SUPABASE_TIMEOUT_MS
+    )) as SupabaseResponse | null
+
+    if (!response) {
+      return { kind: 'unavailable', reason: 'Timed out fetching enrichment state.' }
+    }
+
+    if (response.error) {
+      return { kind: 'unavailable', reason: response.error.message ?? 'Failed fetching enrichment state.' }
+    }
+
+    if (!response.data) {
+      return { kind: 'missing' }
+    }
+
+    return {
+      kind: 'found',
+      payload: {
+        twitterPosts: (response.data.twitter_posts_json as Array<{ scriptId: string; text: string }>) ?? [],
+        firstScriptVideo: {
+          status: response.data.video_status ?? 'queued',
+          jobId: response.data.video_job_id ?? undefined,
+          publicUrl: response.data.video_url ?? undefined,
+          error: response.data.video_error ?? undefined,
+        },
+      },
+    }
+  } catch (error) {
+    return {
+      kind: 'unavailable',
+      reason: error instanceof Error ? error.message : 'Failed fetching enrichment state.',
+    }
   }
 }
 
@@ -122,35 +192,20 @@ export default async function handler(request: Request): Promise<Response> {
       return json(refreshed)
     }
 
-    let persistedPayload: EnrichmentPayload | null = null
-    try {
-      const supabase = getSupabaseAdmin()
-      const response = (await withTimeoutOrNull(
-        supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
-        4000
-      )) as { data?: any } | null
-      const data = response?.data
-      if (data) {
-        persistedPayload = {
-          twitterPosts: (data.twitter_posts_json as Array<{ scriptId: string; text: string }>) ?? [],
-          firstScriptVideo: {
-            status: data.video_status ?? 'queued',
-            jobId: data.video_job_id ?? undefined,
-            publicUrl: data.video_url ?? undefined,
-            error: data.video_error ?? undefined,
-          },
-        }
-      }
-    } catch {
-      persistedPayload = null
+    const persistedLookup = await getPersistedEnrichment(runId)
+    if (persistedLookup.kind === 'unavailable') {
+      return json({ error: persistedLookup.reason }, 503)
     }
 
-    if (!persistedPayload) {
+    if (persistedLookup.kind === 'missing') {
       return json({ error: 'Enrichment not found for run.' }, 404)
     }
 
-    const refreshed = await refreshVideoStatus(persistedPayload)
-    await maybePersistEnrichment(runId, refreshed)
+    const refreshed = await refreshVideoStatus(persistedLookup.payload)
+    const persistResult = await maybePersistEnrichment(runId, refreshed)
+    if (!persistResult.ok) {
+      return json({ ...refreshed, warning: persistResult.reason })
+    }
     return json(refreshed)
   } catch (error) {
     return json(

@@ -224,14 +224,16 @@ export const generateTwitterPosts = async (input: {
       return { posts: fallbackTwitterPosts(input.scripts) }
     }
 
+    const normalizedPosts = posts
+      .slice(0, input.scripts.length)
+      .map((post, index) => ({
+        scriptIndex: post.scriptIndex || index + 1,
+        text: (post.text ?? '').trim().slice(0, 280),
+      }))
+      .filter((post) => post.text.length > 0)
+
     return {
-      posts: posts
-        .slice(0, input.scripts.length)
-        .map((post, index) => ({
-          scriptIndex: post.scriptIndex || index + 1,
-          text: (post.text ?? '').trim().slice(0, 280),
-        }))
-        .filter((post) => post.text.length > 0),
+      posts: normalizedPosts.length ? normalizedPosts : fallbackTwitterPosts(input.scripts),
       usage: parseUsage(payload),
     }
   } catch {

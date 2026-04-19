@@ -91,7 +91,7 @@ export function ScriptResultsPanel(props: ScriptResultsPanelProps) {
                 ) : script.videoStatus === 'queued' || script.videoStatus === 'processing' ? (
                   <p className="text-sm text-muted-foreground">Video is being generated in the background.</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Video not generated yet.</p>
+                  <p className="text-sm text-muted-foreground">Video not generated or enrichment unavailable for this run.</p>
                 )}
               </div>
             ) : null}
@@ -116,7 +116,7 @@ export function ScriptResultsPanel(props: ScriptResultsPanelProps) {
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">Twitter post unavailable.</p>
+                <p className="text-sm text-muted-foreground">Twitter post unavailable or enrichment has not finished.</p>
               )}
             </div>
           </div>

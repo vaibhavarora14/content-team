@@ -21,6 +21,27 @@ type FirstScriptVideo = {
   error?: string
 }
 
+const SUPABASE_TIMEOUT_MS = 4000
+const TWITTER_TIMEOUT_MS = 18000
+
+type SupabaseResponse = {
+  data?: any
+  error?: {
+    message?: string
+  } | null
+}
+
+type ExistingEnrichmentLookup =
+  | {
+      kind: 'found'
+      enrichment: {
+        twitterPosts: Array<{ scriptId: string; text: string }>
+        firstScriptVideo: FirstScriptVideo
+      }
+    }
+  | { kind: 'missing' }
+  | { kind: 'unavailable'; reason: string }
+
 const withTimeout = async <T>(
   task: PromiseLike<T>,
   timeoutMs: number,
@@ -45,16 +66,23 @@ const withTimeoutOrNull = async <T>(task: PromiseLike<T>, timeoutMs: number): Pr
   return await withTimeout(task, timeoutMs, null as T | null)
 }
 
+const fallbackTwitterPosts = (scripts: Array<VideoScript & { id: string }>) =>
+  scripts.map((script, index) => ({
+    scriptId: script.id,
+    text: `${script.hook} ${script.cta}`.trim().slice(0, 280),
+    scriptIndex: index + 1,
+  }))
+
 const maybePersistEnrichment = async (
   runId: string,
   payload: {
     twitterPosts: Array<{ scriptId: string; text: string }>
     firstScriptVideo: FirstScriptVideo
   }
-) => {
+): Promise<{ ok: true } | { ok: false; reason: string }> => {
   try {
     const supabase = getSupabaseAdmin()
-    await withTimeoutOrNull(
+    const response = (await withTimeoutOrNull(
       supabase.from('run_enrichments').upsert(
         {
           run_id: runId,
@@ -67,41 +95,69 @@ const maybePersistEnrichment = async (
         },
         { onConflict: 'run_id' }
       ),
-      4000
-    )
-  } catch {
-    // Local/dev environments may not have run_enrichments yet.
+      SUPABASE_TIMEOUT_MS
+    )) as SupabaseResponse | null
+
+    if (!response) {
+      return { ok: false, reason: 'Timed out persisting enrichment.' }
+    }
+
+    if (response.error) {
+      return { ok: false, reason: response.error.message ?? 'Supabase upsert failed.' }
+    }
+
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : 'Supabase unavailable while persisting enrichment.',
+    }
   }
 }
 
-const getExistingEnrichment = async (runId: string) => {
+const getExistingEnrichment = async (runId: string): Promise<ExistingEnrichmentLookup> => {
   const fallbackRun = getRun(runId)
   if (fallbackRun?.enrichment) {
-    return fallbackRun.enrichment
+    return { kind: 'found', enrichment: fallbackRun.enrichment }
   }
 
   try {
     const supabase = getSupabaseAdmin()
     const response = (await withTimeoutOrNull(
       supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
-      4000
+      SUPABASE_TIMEOUT_MS
     )) as { data?: any } | null
+
+    if (!response) {
+      return { kind: 'unavailable', reason: 'Timed out checking existing enrichment.' }
+    }
+
+    if (response.error) {
+      return { kind: 'unavailable', reason: response.error.message ?? 'Failed reading existing enrichment.' }
+    }
+
     const data = response?.data
     if (!data) {
-      return null
+      return { kind: 'missing' }
     }
 
     return {
-      twitterPosts: (data.twitter_posts_json as Array<{ scriptId: string; text: string }>) ?? [],
-      firstScriptVideo: {
-        status: data.video_status ?? 'queued',
-        jobId: data.video_job_id ?? undefined,
-        publicUrl: data.video_url ?? undefined,
-        error: data.video_error ?? undefined,
-      } as FirstScriptVideo,
+      kind: 'found',
+      enrichment: {
+        twitterPosts: (data.twitter_posts_json as Array<{ scriptId: string; text: string }>) ?? [],
+        firstScriptVideo: {
+          status: data.video_status ?? 'queued',
+          jobId: data.video_job_id ?? undefined,
+          publicUrl: data.video_url ?? undefined,
+          error: data.video_error ?? undefined,
+        } as FirstScriptVideo,
+      },
     }
-  } catch {
-    return null
+  } catch (error) {
+    return {
+      kind: 'unavailable',
+      reason: error instanceof Error ? error.message : 'Failed reading existing enrichment.',
+    }
   }
 }
 
@@ -121,6 +177,7 @@ export default async function handler(request: Request): Promise<Response> {
       return json({ error: 'scripts is required.' }, 400)
     }
 
+    const warnings: string[] = []
     const fallbackRun = getRun(runId)
     let brandBrief = fallbackRun?.brandBrief ?? ''
     if (!brandBrief) {
@@ -128,9 +185,12 @@ export default async function handler(request: Request): Promise<Response> {
         const supabase = getSupabaseAdmin()
         const response = (await withTimeoutOrNull(
           supabase.from('search_runs').select('brand_brief').eq('id', runId).single(),
-          4000
+          SUPABASE_TIMEOUT_MS
         )) as { data?: { brand_brief?: string } } | null
-        brandBrief = response?.data?.brand_brief ?? ''
+        if (!response) {
+          warnings.push('Timed out loading brand brief; using fallback tweets.')
+        }
+        brandBrief = response?.data?.brand_brief?.trim() ?? ''
       } catch {
         brandBrief = ''
       }
@@ -141,12 +201,9 @@ export default async function handler(request: Request): Promise<Response> {
         brandBrief,
         scripts,
       }),
-      18000,
+      TWITTER_TIMEOUT_MS,
       {
-        posts: scripts.map((script, index) => ({
-          scriptIndex: index + 1,
-          text: `${script.hook} ${script.cta}`.trim().slice(0, 280),
-        })),
+        posts: fallbackTwitterPosts(scripts),
       }
     )
     const twitterPosts = scripts.map((script, index) => ({
@@ -154,19 +211,28 @@ export default async function handler(request: Request): Promise<Response> {
       text: twitter.posts.find((post) => post.scriptIndex === index + 1)?.text ?? '',
     }))
 
-    const existingEnrichment = await getExistingEnrichment(runId)
+    if (!twitter.posts?.length) {
+      warnings.push('Twitter generation returned no posts; used fallback copy.')
+    }
+
+    const existingLookup = await getExistingEnrichment(runId)
+    if (existingLookup.kind === 'unavailable') {
+      warnings.push(existingLookup.reason)
+    }
+
     const hasActiveVideoJob =
-      existingEnrichment?.firstScriptVideo?.jobId &&
-      (existingEnrichment.firstScriptVideo.status === 'queued' ||
-        existingEnrichment.firstScriptVideo.status === 'processing')
+      existingLookup.kind === 'found' &&
+      existingLookup.enrichment.firstScriptVideo?.jobId &&
+      (existingLookup.enrichment.firstScriptVideo.status === 'queued' ||
+        existingLookup.enrichment.firstScriptVideo.status === 'processing')
 
     let firstScriptVideo: FirstScriptVideo
     if (hasActiveVideoJob) {
       firstScriptVideo = {
-        status: existingEnrichment?.firstScriptVideo?.status ?? 'queued',
-        jobId: existingEnrichment?.firstScriptVideo?.jobId,
-        publicUrl: existingEnrichment?.firstScriptVideo?.publicUrl,
-        error: existingEnrichment?.firstScriptVideo?.error,
+        status: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.status ?? 'queued' : 'queued',
+        jobId: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.jobId : undefined,
+        publicUrl: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.publicUrl : undefined,
+        error: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.error : undefined,
       }
     } else {
       const renderResult = await createRenderVideoJob(runId, scripts[0])
@@ -175,6 +241,7 @@ export default async function handler(request: Request): Promise<Response> {
           status: 'failed',
           error: renderResult.error,
         }
+        warnings.push(`Video job enqueue failed: ${renderResult.error}`)
       } else {
         firstScriptVideo = {
           status: 'queued',
@@ -186,11 +253,21 @@ export default async function handler(request: Request): Promise<Response> {
 
     if (fallbackRun) {
       setRunEnrichment(runId, payload)
-    } else {
-      await maybePersistEnrichment(runId, payload)
     }
 
-    return json(payload)
+    const persistResult = await maybePersistEnrichment(runId, payload)
+    if (!persistResult.ok) {
+      warnings.push(persistResult.reason)
+    }
+
+    return json(
+      warnings.length
+        ? {
+            ...payload,
+            warnings,
+          }
+        : payload
+    )
   } catch (error) {
     return json(
       {
