@@ -49,10 +49,13 @@ const readJsonBody = (req) =>
   })
 
 const normalizeJobStatus = (status) => {
+  if (typeof status !== 'string' || !status.trim()) {
+    return 'queued'
+  }
   if (status === 'queued' || status === 'processing' || status === 'completed' || status === 'failed') {
     return status
   }
-  return 'failed'
+  return 'queued'
 }
 
 const createIdempotencyKey = (runId, scriptId, scriptText) =>
