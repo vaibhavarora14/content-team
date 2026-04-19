@@ -2,8 +2,6 @@ const http = require('http')
 const crypto = require('crypto')
 const { URL } = require('url')
 
-const { runReelPipeline } = require('./video-creation/src/pipeline')
-
 const port = Number(process.env.PORT || 10000)
 const workerSecret = process.env.RENDER_VIDEO_WORKER_SECRET || ''
 
@@ -70,6 +68,7 @@ const processJob = async (jobId) => {
   job.updatedAt = new Date().toISOString()
 
   try {
+    const { runReelPipeline } = require('./video-creation/src/pipeline')
     const output = await runReelPipeline(job.scriptText)
     job.status = 'completed'
     job.publicUrl = output
