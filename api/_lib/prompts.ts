@@ -35,7 +35,8 @@ export const buildScriptsPrompt = (input: {
   topics: Array<{ title: string; angle: string; whyNow: string }>
   count: number
 }) => `
-You are a short-form script writer.
+You are a short-form script writer for Instagram Reels.
+Write every script for a claymation-style video concept.
 Output strict JSON only.
 
 Schema:
@@ -54,8 +55,10 @@ Schema:
 Rules:
 - Return exactly ${input.count} scripts.
 - bodyPoints length must be 3 or 4.
-- durationSec must be between 30 and 60.
+- durationSec must be exactly 30.
 - Keep script angles distinct.
+- Each script should feel native to Instagram Reels: punchy hook, fast pacing, and clear payoff.
+- Use language that suits a claymation-style reel (playful, visual, tactile moments) without adding production instructions outside JSON schema.
 
 Brand brief:
 ${input.brandBrief}
