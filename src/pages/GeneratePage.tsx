@@ -75,6 +75,24 @@ export function GeneratePage() {
   const hasRunActivity =
     isGeneratingFlow || runId.length > 0 || steps.some((step) => step.status !== 'pending')
 
+  const throwIfNotOk = async (response: Response) => {
+    if (response.ok) {
+      return
+    }
+
+    let message = `Request failed with ${response.status}`
+    try {
+      const payload = (await response.json()) as { error?: string }
+      if (payload?.error) {
+        message = payload.error
+      }
+    } catch {
+      // Ignore JSON parse failures and keep status fallback.
+    }
+
+    throw new Error(message)
+  }
+
   const setStepStatus = (key: RunStepKey, status: RunStepState['status']) => {
     setSteps((previous) =>
       previous.map((step) => {
@@ -139,9 +157,7 @@ export function GeneratePage() {
           topN: 10,
         }),
       })
-      if (!searchResponse.ok) {
-        throw new Error(`Request failed with ${searchResponse.status}`)
-      }
+      await throwIfNotOk(searchResponse)
 
       const searchPayload = (await searchResponse.json()) as { run: { id: string } }
       const nextRunId = searchPayload.run.id
@@ -161,9 +177,7 @@ export function GeneratePage() {
           maxUrls: 5,
         }),
       })
-      if (!scrapeResponse.ok) {
-        throw new Error(`Request failed with ${scrapeResponse.status}`)
-      }
+      await throwIfNotOk(scrapeResponse)
       setStepStatus('scrape', 'completed')
 
       stage = 'topics'
@@ -176,9 +190,7 @@ export function GeneratePage() {
         },
         body: JSON.stringify({ runId: nextRunId }),
       })
-      if (!topicsResponse.ok) {
-        throw new Error(`Request failed with ${topicsResponse.status}`)
-      }
+      await throwIfNotOk(topicsResponse)
       setStepStatus('topics', 'completed')
 
       const topicsPayload = (await topicsResponse.json()) as { topics: Array<{ id: string }> }
@@ -198,9 +210,7 @@ export function GeneratePage() {
           count: 5,
         }),
       })
-      if (!scriptsResponse.ok) {
-        throw new Error(`Request failed with ${scriptsResponse.status}`)
-      }
+      await throwIfNotOk(scriptsResponse)
 
       const scriptsPayload = (await scriptsResponse.json()) as { scripts: VideoScript[] }
       const generatedScripts = scriptsPayload.scripts ?? []
@@ -221,10 +231,7 @@ export function GeneratePage() {
           scripts: generatedScripts,
         }),
       })
-
-      if (!enrichResponse.ok) {
-        throw new Error(`Request failed with ${enrichResponse.status}`)
-      }
+      await throwIfNotOk(enrichResponse)
 
       const enrichPayload = (await enrichResponse.json()) as EnrichmentPayload
       const enrichedScripts = mergeEnrichment(generatedScripts, enrichPayload)
