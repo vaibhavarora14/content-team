@@ -1,9 +1,9 @@
-import { deriveQueriesFromBrief } from '../_lib/brief-interpreter'
-import { createRun, setRunSourceResults, setRunStatus } from '../_lib/dev-store'
-import { json, parseJsonBody } from '../_lib/http'
-import { searchKeyword } from '../_lib/oxylabs'
-import { getSupabaseAdmin } from '../_lib/supabase'
-import type { SourceResult } from '../_lib/types'
+import { deriveQueriesFromBrief } from '../_lib/brief-interpreter.js'
+import { createRun, setRunSourceResults, setRunStatus } from '../_lib/dev-store.js'
+import { json, parseJsonBody } from '../_lib/http.js'
+import { searchKeyword } from '../_lib/oxylabs.js'
+import { getSupabaseAdmin } from '../_lib/supabase.js'
+import type { SourceResult } from '../_lib/types.js'
 
 export const config = {
   runtime: 'edge',

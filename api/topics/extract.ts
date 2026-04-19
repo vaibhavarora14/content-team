@@ -1,8 +1,8 @@
-import { getRun, setRunStatus, setRunTopics } from '../_lib/dev-store'
-import { json, parseJsonBody } from '../_lib/http'
-import { getSupabaseAdmin } from '../_lib/supabase'
-import { extractTopicsFromResearch } from '../_lib/topic-extractor'
-import type { SourceDocument, SourceResult } from '../_lib/types'
+import { getRun, setRunStatus, setRunTopics } from '../_lib/dev-store.js'
+import { json, parseJsonBody } from '../_lib/http.js'
+import { getSupabaseAdmin } from '../_lib/supabase.js'
+import { extractTopicsFromResearch } from '../_lib/topic-extractor.js'
+import type { SourceDocument, SourceResult } from '../_lib/types.js'
 
 export const config = {
   runtime: 'edge',

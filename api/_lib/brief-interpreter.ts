@@ -1,4 +1,4 @@
-import type { DerivedQuery } from './types'
+import type { DerivedQuery } from './types.js'
 
 const STOP_WORDS = new Set([
   'a',

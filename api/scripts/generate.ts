@@ -1,7 +1,7 @@
-import { getRun, setRunScripts, setRunStatus } from '../_lib/dev-store'
-import { json, parseJsonBody } from '../_lib/http'
-import { generateScripts } from '../_lib/llm'
-import { getSupabaseAdmin, optionalEnv } from '../_lib/supabase'
+import { getRun, setRunScripts, setRunStatus } from '../_lib/dev-store.js'
+import { json, parseJsonBody } from '../_lib/http.js'
+import { generateScripts } from '../_lib/llm.js'
+import { getSupabaseAdmin, optionalEnv } from '../_lib/supabase.js'
 
 export const config = {
   runtime: 'edge',

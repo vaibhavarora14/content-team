@@ -1,7 +1,7 @@
-import { getRun, setRunSourceDocuments, setRunStatus } from '../_lib/dev-store'
-import { json, parseJsonBody } from '../_lib/http'
-import { scrapeUrls } from '../_lib/oxylabs'
-import { getSupabaseAdmin } from '../_lib/supabase'
+import { getRun, setRunSourceDocuments, setRunStatus } from '../_lib/dev-store.js'
+import { json, parseJsonBody } from '../_lib/http.js'
+import { scrapeUrls } from '../_lib/oxylabs.js'
+import { getSupabaseAdmin } from '../_lib/supabase.js'
 
 export const config = {
   runtime: 'edge',

@@ -1,4 +1,10 @@
-import type { DerivedQuery, SourceDocument, SourceResult, TopicCandidate, VideoScript } from './types'
+import type {
+  DerivedQuery,
+  SourceDocument,
+  SourceResult,
+  TopicCandidate,
+  VideoScript,
+} from './types.js'
 
 type RunRecord = {
   id: string

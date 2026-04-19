@@ -1,7 +1,7 @@
-import { normalizeBaseUrl } from './http'
-import { buildRepairPrompt, buildScriptsPrompt, buildTopicsPrompt } from './prompts'
-import { optionalEnv } from './supabase'
-import type { LlmUsage, TopicCandidate, VideoScript } from './types'
+import { normalizeBaseUrl } from './http.js'
+import { buildRepairPrompt, buildScriptsPrompt, buildTopicsPrompt } from './prompts.js'
+import { optionalEnv } from './supabase.js'
+import type { LlmUsage, TopicCandidate, VideoScript } from './types.js'
 
 const getConfig = () => ({
   baseUrl: normalizeBaseUrl(optionalEnv('LLM_BASE_URL'), 'https://opencode.ai/zen/v1'),

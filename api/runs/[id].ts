@@ -1,6 +1,6 @@
-import { json } from '../../_lib/http'
-import { getRun } from '../../_lib/dev-store'
-import { getSupabaseAdmin } from '../../_lib/supabase'
+import { json } from '../_lib/http.js'
+import { getRun } from '../_lib/dev-store.js'
+import { getSupabaseAdmin } from '../_lib/supabase.js'
 
 export const config = {
   runtime: 'edge',
@@ -9,7 +9,7 @@ export const config = {
 const getRunIdFromRequest = (request: Request) => {
   const url = new URL(request.url)
   const segments = url.pathname.split('/').filter(Boolean)
-  return segments.at(-1) ?? ''
+  return segments[segments.length - 1] ?? ''
 }
 
 export default async function handler(request: Request): Promise<Response> {

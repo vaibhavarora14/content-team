@@ -1,4 +1,4 @@
-import type { SourceDocument, SourceResult } from './types'
+import type { SourceDocument, SourceResult } from './types.js'
 
 const asString = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback)
 
@@ -68,20 +68,26 @@ export const normalizeScrapePayload = (
   }
 
   return rows
-    .map((row, index) => {
+    .map((row, index): SourceDocument | null => {
       const item = row as Record<string, unknown>
       const url = asString(item.url) || requestedUrls[index]
       if (!url) {
         return null
       }
 
-      return {
+      const baseDocument = {
         url,
         title: asString(item.title, url),
         extractedText:
           asString(item.extracted_text) || asString(item.content) || asString(item.text),
-        providerRequestId: asString(item.request_id) || undefined,
-      } satisfies SourceDocument
+      }
+
+      const providerRequestId = asString(item.request_id)
+      if (providerRequestId) {
+        return { ...baseDocument, providerRequestId }
+      }
+
+      return baseDocument
     })
     .filter((item): item is SourceDocument => item !== null)
 }

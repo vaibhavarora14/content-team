@@ -1,5 +1,5 @@
-import { generateTopics } from './llm'
-import type { SourceDocument, SourceResult, TopicCandidate } from './types'
+import { generateTopics } from './llm.js'
+import type { SourceDocument, SourceResult, TopicCandidate } from './types.js'
 
 const toResultSnippet = (result: SourceResult, index: number) =>
   `[Result ${index + 1}] query=${result.query}\n${result.title}\n${result.snippet}\n${result.url}`

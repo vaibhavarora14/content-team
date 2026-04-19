@@ -1,7 +1,7 @@
-import { normalizeBaseUrl } from './http'
-import { normalizeScrapePayload, normalizeSerpPayload } from './research-normalizer'
-import { optionalEnv, requireEnv } from './supabase'
-import type { SourceDocument, SourceResult } from './types'
+import { normalizeBaseUrl } from './http.js'
+import { normalizeScrapePayload, normalizeSerpPayload } from './research-normalizer.js'
+import { optionalEnv, requireEnv } from './supabase.js'
+import type { SourceDocument, SourceResult } from './types.js'
 
 const DEFAULT_SERP_ENDPOINT = 'https://realtime.oxylabs.io/v1/queries'
 const DEFAULT_SCRAPE_ENDPOINT = 'https://realtime.oxylabs.io/v1/queries'
