@@ -20,14 +20,14 @@ type EnrichmentPayload = {
 }
 
 const withTimeout = async <T>(
-  task: Promise<T>,
+  task: PromiseLike<T>,
   timeoutMs: number,
   fallbackValue: T
 ): Promise<T> => {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      task,
+      Promise.resolve(task),
       new Promise<T>((resolve) => {
         timeoutHandle = setTimeout(() => resolve(fallbackValue), timeoutMs)
       }),
@@ -39,7 +39,7 @@ const withTimeout = async <T>(
   }
 }
 
-const withTimeoutOrNull = async <T>(task: Promise<T>, timeoutMs: number): Promise<T | null> => {
+const withTimeoutOrNull = async <T>(task: PromiseLike<T>, timeoutMs: number): Promise<T | null> => {
   return await withTimeout(task, timeoutMs, null as T | null)
 }
 
@@ -125,10 +125,10 @@ export default async function handler(request: Request): Promise<Response> {
     let persistedPayload: EnrichmentPayload | null = null
     try {
       const supabase = getSupabaseAdmin()
-      const response = await withTimeoutOrNull(
+      const response = (await withTimeoutOrNull(
         supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
         4000
-      )
+      )) as { data?: any } | null
       const data = response?.data
       if (data) {
         persistedPayload = {

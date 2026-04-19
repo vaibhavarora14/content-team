@@ -22,14 +22,14 @@ type FirstScriptVideo = {
 }
 
 const withTimeout = async <T>(
-  task: Promise<T>,
+  task: PromiseLike<T>,
   timeoutMs: number,
   fallbackValue: T
 ): Promise<T> => {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      task,
+      Promise.resolve(task),
       new Promise<T>((resolve) => {
         timeoutHandle = setTimeout(() => resolve(fallbackValue), timeoutMs)
       }),
@@ -41,7 +41,7 @@ const withTimeout = async <T>(
   }
 }
 
-const withTimeoutOrNull = async <T>(task: Promise<T>, timeoutMs: number): Promise<T | null> => {
+const withTimeoutOrNull = async <T>(task: PromiseLike<T>, timeoutMs: number): Promise<T | null> => {
   return await withTimeout(task, timeoutMs, null as T | null)
 }
 
@@ -82,10 +82,10 @@ const getExistingEnrichment = async (runId: string) => {
 
   try {
     const supabase = getSupabaseAdmin()
-    const response = await withTimeoutOrNull(
+    const response = (await withTimeoutOrNull(
       supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
       4000
-    )
+    )) as { data?: any } | null
     const data = response?.data
     if (!data) {
       return null
@@ -126,10 +126,10 @@ export default async function handler(request: Request): Promise<Response> {
     if (!brandBrief) {
       try {
         const supabase = getSupabaseAdmin()
-        const response = await withTimeoutOrNull(
+        const response = (await withTimeoutOrNull(
           supabase.from('search_runs').select('brand_brief').eq('id', runId).single(),
           4000
-        )
+        )) as { data?: { brand_brief?: string } } | null
         brandBrief = response?.data?.brand_brief ?? ''
       } catch {
         brandBrief = ''
@@ -170,15 +170,15 @@ export default async function handler(request: Request): Promise<Response> {
       }
     } else {
       const renderResult = await createRenderVideoJob(runId, scripts[0])
-      if (renderResult.ok) {
-        firstScriptVideo = {
-          status: 'queued',
-          jobId: renderResult.jobId,
-        }
-      } else {
+      if (!renderResult.ok) {
         firstScriptVideo = {
           status: 'failed',
           error: renderResult.error,
+        }
+      } else {
+        firstScriptVideo = {
+          status: 'queued',
+          jobId: renderResult.jobId,
         }
       }
     }
