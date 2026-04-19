@@ -9,6 +9,7 @@ type KeywordSearchFormProps = {
   brandBrief: string
   onBrandBriefChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onUseExampleBrief: () => void
   isSubmitting: boolean
 }
 
@@ -34,6 +35,20 @@ export function KeywordSearchForm(props: KeywordSearchFormProps) {
               placeholder="Example: We sell protein bars for busy professionals who want clean ingredients and sustained energy."
               required
             />
+            {!props.brandBrief.trim().length ? (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 rounded-full px-3 text-xs"
+                  onClick={props.onUseExampleBrief}
+                  disabled={props.isSubmitting}
+                >
+                  Use example
+                </Button>
+              </div>
+            ) : null}
           </div>
 
           <Button type="submit" disabled={props.isSubmitting}>
