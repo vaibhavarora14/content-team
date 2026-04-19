@@ -41,6 +41,10 @@ const withTimeout = async <T>(
   }
 }
 
+const withTimeoutOrNull = async <T>(task: Promise<T>, timeoutMs: number): Promise<T | null> => {
+  return await withTimeout(task, timeoutMs, null as T | null)
+}
+
 const maybePersistEnrichment = async (
   runId: string,
   payload: {
@@ -50,17 +54,20 @@ const maybePersistEnrichment = async (
 ) => {
   try {
     const supabase = getSupabaseAdmin()
-    await supabase.from('run_enrichments').upsert(
-      {
-        run_id: runId,
-        twitter_posts_json: payload.twitterPosts,
-        video_job_id: payload.firstScriptVideo.jobId ?? null,
-        video_status: payload.firstScriptVideo.status,
-        video_url: payload.firstScriptVideo.publicUrl ?? null,
-        video_error: payload.firstScriptVideo.error ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'run_id' }
+    await withTimeoutOrNull(
+      supabase.from('run_enrichments').upsert(
+        {
+          run_id: runId,
+          twitter_posts_json: payload.twitterPosts,
+          video_job_id: payload.firstScriptVideo.jobId ?? null,
+          video_status: payload.firstScriptVideo.status,
+          video_url: payload.firstScriptVideo.publicUrl ?? null,
+          video_error: payload.firstScriptVideo.error ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'run_id' }
+      ),
+      4000
     )
   } catch {
     // Local/dev environments may not have run_enrichments yet.
@@ -75,7 +82,11 @@ const getExistingEnrichment = async (runId: string) => {
 
   try {
     const supabase = getSupabaseAdmin()
-    const { data } = await supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle()
+    const response = await withTimeoutOrNull(
+      supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
+      4000
+    )
+    const data = response?.data
     if (!data) {
       return null
     }
@@ -115,8 +126,11 @@ export default async function handler(request: Request): Promise<Response> {
     if (!brandBrief) {
       try {
         const supabase = getSupabaseAdmin()
-        const { data } = await supabase.from('search_runs').select('brand_brief').eq('id', runId).single()
-        brandBrief = data?.brand_brief ?? ''
+        const response = await withTimeoutOrNull(
+          supabase.from('search_runs').select('brand_brief').eq('id', runId).single(),
+          4000
+        )
+        brandBrief = response?.data?.brand_brief ?? ''
       } catch {
         brandBrief = ''
       }

@@ -19,6 +19,30 @@ type EnrichmentPayload = {
   firstScriptVideo: FirstScriptVideo
 }
 
+const withTimeout = async <T>(
+  task: Promise<T>,
+  timeoutMs: number,
+  fallbackValue: T
+): Promise<T> => {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(fallbackValue), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle)
+    }
+  }
+}
+
+const withTimeoutOrNull = async <T>(task: Promise<T>, timeoutMs: number): Promise<T | null> => {
+  return await withTimeout(task, timeoutMs, null as T | null)
+}
+
 const getRunIdFromRequest = (request: Request) => {
   const url = new URL(request.url)
   return (url.searchParams.get('runId') ?? '').trim()
@@ -27,17 +51,20 @@ const getRunIdFromRequest = (request: Request) => {
 const maybePersistEnrichment = async (runId: string, payload: EnrichmentPayload) => {
   try {
     const supabase = getSupabaseAdmin()
-    await supabase.from('run_enrichments').upsert(
-      {
-        run_id: runId,
-        twitter_posts_json: payload.twitterPosts,
-        video_job_id: payload.firstScriptVideo.jobId ?? null,
-        video_status: payload.firstScriptVideo.status,
-        video_url: payload.firstScriptVideo.publicUrl ?? null,
-        video_error: payload.firstScriptVideo.error ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'run_id' }
+    await withTimeoutOrNull(
+      supabase.from('run_enrichments').upsert(
+        {
+          run_id: runId,
+          twitter_posts_json: payload.twitterPosts,
+          video_job_id: payload.firstScriptVideo.jobId ?? null,
+          video_status: payload.firstScriptVideo.status,
+          video_url: payload.firstScriptVideo.publicUrl ?? null,
+          video_error: payload.firstScriptVideo.error ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'run_id' }
+      ),
+      4000
     )
   } catch {
     // Enrichment storage can be unavailable in local/dev.
@@ -98,7 +125,11 @@ export default async function handler(request: Request): Promise<Response> {
     let persistedPayload: EnrichmentPayload | null = null
     try {
       const supabase = getSupabaseAdmin()
-      const { data } = await supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle()
+      const response = await withTimeoutOrNull(
+        supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
+        4000
+      )
+      const data = response?.data
       if (data) {
         persistedPayload = {
           twitterPosts: (data.twitter_posts_json as Array<{ scriptId: string; text: string }>) ?? [],
