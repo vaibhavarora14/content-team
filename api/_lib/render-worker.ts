@@ -1,8 +1,9 @@
 import { normalizeBaseUrl } from './http.js'
 import { optionalEnv } from './supabase.js'
 import type { VideoScript } from './types.js'
+import type { EnrichmentStage, TwitterStatus } from './enrichment.js'
 
-export type VideoJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
+export type VideoJobStatus = 'not_started' | 'queued' | 'processing' | 'completed' | 'failed'
 
 type WorkerCreateResponse = {
   jobId?: string
@@ -18,19 +19,27 @@ type WorkerCreateResponse = {
 }
 
 type WorkerStatusResponse = {
+  videoStatus?: string
   status?: string
   state?: string
+  stage?: string
   publicUrl?: string
   videoUrl?: string
   url?: string
+  twitterStatus?: string
+  twitterPosts?: Array<{ scriptId?: string; text?: string }>
   error?: string
   message?: string
   data?: {
+    videoStatus?: string
     status?: string
     state?: string
+    stage?: string
     publicUrl?: string
     videoUrl?: string
     url?: string
+    twitterStatus?: string
+    twitterPosts?: Array<{ scriptId?: string; text?: string }>
     error?: string
     message?: string
   }
@@ -70,6 +79,9 @@ const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: numbe
 
 const mapWorkerStatus = (value: string | undefined): VideoJobStatus => {
   const normalized = (value ?? '').trim().toLowerCase()
+  if (normalized === 'not_started' || normalized === 'not-started') {
+    return 'not_started'
+  }
   if (normalized === 'done' || normalized === 'success' || normalized === 'completed') {
     return 'completed'
   }
@@ -84,7 +96,12 @@ const mapWorkerStatus = (value: string | undefined): VideoJobStatus => {
 
 export const createRenderVideoJob = async (
   runId: string,
-  firstScript: VideoScript & { id: string }
+  input: {
+    firstScript: VideoScript & { id: string }
+    scripts: Array<VideoScript & { id: string }>
+    brandBrief?: string
+    startVideo?: boolean
+  }
 ): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> => {
   const baseUrl = getWorkerBaseUrl()
   if (!baseUrl) {
@@ -101,9 +118,12 @@ export const createRenderVideoJob = async (
       headers: getWorkerHeaders(),
       body: JSON.stringify({
         runId,
-        scriptId: firstScript.id,
-        script: firstScript,
-        scriptText: buildNarrationScript(firstScript),
+        scriptId: input.firstScript.id,
+        script: input.firstScript,
+        scripts: input.scripts,
+        brandBrief: input.brandBrief ?? '',
+        startVideo: input.startVideo ?? true,
+        scriptText: buildNarrationScript(input.firstScript),
       }),
       },
       15000
@@ -142,7 +162,15 @@ export const createRenderVideoJob = async (
 export const getRenderVideoJobStatus = async (
   jobId: string
 ): Promise<
-  | { ok: true; status: VideoJobStatus; publicUrl?: string; error?: string }
+  | {
+      ok: true
+      status: VideoJobStatus
+      stage?: EnrichmentStage
+      publicUrl?: string
+      twitterStatus?: TwitterStatus
+      twitterPosts?: Array<{ scriptId: string; text: string }>
+      error?: string
+    }
   | { ok: false; error: string }
 > => {
   const baseUrl = getWorkerBaseUrl()
@@ -175,13 +203,40 @@ export const getRenderVideoJobStatus = async (
       }
     }
 
-    const rawStatus = payload?.status || payload?.state || payload?.data?.status || payload?.data?.state
+    const rawStatus =
+      payload?.videoStatus || payload?.data?.videoStatus || payload?.status || payload?.state || payload?.data?.status || payload?.data?.state
     const status = mapWorkerStatus(rawStatus)
+    const rawStage = payload?.stage || payload?.data?.stage
+    const stage =
+      rawStage === 'queued' ||
+      rawStage === 'twitter' ||
+      rawStage === 'video' ||
+      rawStage === 'voiceover' ||
+      rawStage === 'stitch' ||
+      rawStage === 'upload' ||
+      rawStage === 'completed' ||
+      rawStage === 'failed'
+        ? rawStage
+        : undefined
     const publicUrl =
       payload?.publicUrl || payload?.videoUrl || payload?.url || payload?.data?.publicUrl || payload?.data?.videoUrl || payload?.data?.url
+    const rawTwitterStatus = payload?.twitterStatus || payload?.data?.twitterStatus
+    const twitterStatus =
+      rawTwitterStatus === 'pending' ||
+      rawTwitterStatus === 'processing' ||
+      rawTwitterStatus === 'completed' ||
+      rawTwitterStatus === 'failed'
+        ? rawTwitterStatus
+        : undefined
+    const twitterPosts = (payload?.twitterPosts || payload?.data?.twitterPosts || [])
+      .map((post) => ({
+        scriptId: typeof post?.scriptId === 'string' ? post.scriptId : '',
+        text: typeof post?.text === 'string' ? post.text : '',
+      }))
+      .filter((post) => post.scriptId && post.text)
     const error = payload?.error || payload?.message || payload?.data?.error || payload?.data?.message
 
-    return { ok: true, status, publicUrl, error }
+    return { ok: true, status, stage, publicUrl, twitterStatus, twitterPosts, error }
   } catch (error) {
     return {
       ok: false,

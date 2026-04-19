@@ -18,9 +18,11 @@ type RunRecord = {
   topicCandidates: Array<TopicCandidate & { id: string }>
   videoScripts: Array<VideoScript & { id: string }>
   enrichment?: {
+    stage?: 'queued' | 'twitter' | 'video' | 'voiceover' | 'stitch' | 'upload' | 'completed' | 'failed'
+    twitterStatus?: 'pending' | 'processing' | 'completed' | 'failed'
     twitterPosts: Array<{ scriptId: string; text: string }>
     firstScriptVideo?: {
-      status: 'queued' | 'processing' | 'completed' | 'failed'
+      status: 'not_started' | 'queued' | 'processing' | 'completed' | 'failed'
       jobId?: string
       publicUrl?: string
       error?: string
@@ -142,9 +144,11 @@ export const setRunScripts = (id: string, scripts: VideoScript[]) => {
 export const setRunEnrichment = (
   id: string,
   enrichment: {
+    stage?: 'queued' | 'twitter' | 'video' | 'voiceover' | 'stitch' | 'upload' | 'completed' | 'failed'
+    twitterStatus?: 'pending' | 'processing' | 'completed' | 'failed'
     twitterPosts: Array<{ scriptId: string; text: string }>
     firstScriptVideo?: {
-      status: 'queued' | 'processing' | 'completed' | 'failed'
+      status: 'not_started' | 'queued' | 'processing' | 'completed' | 'failed'
       jobId?: string
       publicUrl?: string
       error?: string

@@ -1,6 +1,7 @@
 import { json } from '../_lib/http.js'
 import { getRun } from '../_lib/dev-store.js'
 import { getSupabaseAdmin } from '../_lib/supabase.js'
+import { normalizeTwitterState } from '../_lib/enrichment.js'
 
 export const config = {
   runtime: 'edge',
@@ -108,10 +109,16 @@ export default async function handler(request: Request): Promise<Response> {
       enrichmentResponse.error || !enrichmentResponse.data
         ? null
         : {
-            twitterPosts: (enrichmentResponse.data.twitter_posts_json as Array<{
-              scriptId: string
-              text: string
-            }>) ?? [],
+            stage:
+              enrichmentResponse.data.video_status === 'completed'
+                ? 'completed'
+                : enrichmentResponse.data.video_status === 'failed'
+                  ? 'failed'
+                  : enrichmentResponse.data.video_status === 'not_started'
+                    ? 'twitter'
+                  : 'video',
+            twitterStatus: normalizeTwitterState(enrichmentResponse.data.twitter_posts_json).status,
+            twitterPosts: normalizeTwitterState(enrichmentResponse.data.twitter_posts_json).posts,
             firstScriptVideo: {
               status: enrichmentResponse.data.video_status,
               jobId: enrichmentResponse.data.video_job_id ?? undefined,

@@ -4,6 +4,8 @@ import type { VideoScript } from './types'
 
 type ScriptResultsPanelProps = {
   scripts: VideoScript[]
+  onCreateVideo?: () => void
+  isCreatingVideo?: boolean
 }
 
 const formatScriptForCopy = (script: VideoScript) =>
@@ -21,7 +23,16 @@ const getTwitterIntentUrl = (text: string) =>
   `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
 
 const getVideoStatusLabel = (status: VideoScript['videoStatus']) => {
+  if (status === 'not_started') return 'Not started'
   if (status === 'queued') return 'Queued'
+  if (status === 'processing') return 'Processing'
+  if (status === 'completed') return 'Ready'
+  if (status === 'failed') return 'Failed'
+  return 'Not started'
+}
+
+const getTwitterStatusLabel = (status: VideoScript['twitterStatus']) => {
+  if (status === 'pending') return 'Pending'
   if (status === 'processing') return 'Processing'
   if (status === 'completed') return 'Ready'
   if (status === 'failed') return 'Failed'
@@ -81,6 +92,22 @@ export function ScriptResultsPanel(props: ScriptResultsPanelProps) {
               <div className="space-y-2 rounded-md bg-muted/40 p-3">
                 <p className="text-sm font-medium">Video (from script #1)</p>
                 <p className="text-xs text-muted-foreground">Status: {getVideoStatusLabel(script.videoStatus)}</p>
+                {(script.videoStatus === 'not_started' || !script.videoStatus) && props.onCreateVideo ? (
+                  <div className="space-y-1">
+                    <Button
+                      disabled={props.isCreatingVideo}
+                      onClick={() => props.onCreateVideo?.()}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                    >
+                      {props.isCreatingVideo ? 'Starting video...' : 'Create Video'}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Twitter posts are generated first. Click Create Video to start rendering script #1.
+                    </p>
+                  </div>
+                ) : null}
                 {script.videoUrl ? (
                   <>
                     <video className="max-h-96 w-full rounded-md border bg-black/80" controls src={script.videoUrl} />
@@ -91,13 +118,16 @@ export function ScriptResultsPanel(props: ScriptResultsPanelProps) {
                 ) : script.videoStatus === 'queued' || script.videoStatus === 'processing' ? (
                   <p className="text-sm text-muted-foreground">Video is being generated in the background.</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Video not generated or enrichment unavailable for this run.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Video is optional for this run. Click Create Video to generate it for script #1.
+                  </p>
                 )}
               </div>
             ) : null}
 
             <div className="space-y-2 rounded-md bg-muted/40 p-3">
               <p className="text-sm font-medium">Twitter post</p>
+              <p className="text-xs text-muted-foreground">Status: {getTwitterStatusLabel(script.twitterStatus)}</p>
               {script.twitterPost ? (
                 <>
                   <p className="text-sm whitespace-pre-wrap">{script.twitterPost}</p>
@@ -116,7 +146,7 @@ export function ScriptResultsPanel(props: ScriptResultsPanelProps) {
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">Twitter post unavailable or enrichment has not finished.</p>
+                <p className="text-sm text-muted-foreground">Twitter post unavailable or enrichment is still running.</p>
               )}
             </div>
           </div>

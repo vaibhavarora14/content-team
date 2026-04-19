@@ -1,6 +1,7 @@
 import { getRun, setRunEnrichment } from '../_lib/dev-store.js'
 import { json } from '../_lib/http.js'
 import { getRenderVideoJobStatus, type VideoJobStatus } from '../_lib/render-worker.js'
+import { normalizeTwitterState, type EnrichmentStage, type TwitterStatus } from '../_lib/enrichment.js'
 import { getSupabaseAdmin } from '../_lib/supabase.js'
 
 export const config = {
@@ -15,8 +16,12 @@ type FirstScriptVideo = {
 }
 
 type EnrichmentPayload = {
+  runId?: string
+  stage?: EnrichmentStage
+  twitterStatus?: TwitterStatus
   twitterPosts: Array<{ scriptId: string; text: string }>
   firstScriptVideo: FirstScriptVideo
+  warning?: string
 }
 
 const SUPABASE_TIMEOUT_MS = 4000
@@ -62,17 +67,17 @@ const getRunIdFromRequest = (request: Request) => {
   return (url.searchParams.get('runId') ?? '').trim()
 }
 
-const maybePersistEnrichment = async (
-  runId: string,
-  payload: EnrichmentPayload
-): Promise<{ ok: true } | { ok: false; reason: string }> => {
+const maybePersistEnrichment = async (runId: string, payload: EnrichmentPayload): Promise<void> => {
   try {
     const supabase = getSupabaseAdmin()
-    const response = (await withTimeoutOrNull(
+    await withTimeoutOrNull(
       supabase.from('run_enrichments').upsert(
         {
           run_id: runId,
-          twitter_posts_json: payload.twitterPosts,
+          twitter_posts_json: {
+            status: payload.twitterStatus ?? (payload.twitterPosts.length ? 'completed' : 'pending'),
+            posts: payload.twitterPosts,
+          },
           video_job_id: payload.firstScriptVideo.jobId ?? null,
           video_status: payload.firstScriptVideo.status,
           video_url: payload.firstScriptVideo.publicUrl ?? null,
@@ -82,28 +87,19 @@ const maybePersistEnrichment = async (
         { onConflict: 'run_id' }
       ),
       SUPABASE_TIMEOUT_MS
-    )) as SupabaseResponse | null
-
-    if (!response) {
-      return { ok: false, reason: 'Timed out persisting enrichment status.' }
-    }
-
-    if (response.error) {
-      return { ok: false, reason: response.error.message ?? 'Failed persisting enrichment status.' }
-    }
-
-    return { ok: true }
-  } catch (error) {
-    return {
-      ok: false,
-      reason: error instanceof Error ? error.message : 'Enrichment storage unavailable.',
-    }
-  }
+    )
+  } catch {}
 }
 
 const refreshVideoStatus = async (payload: EnrichmentPayload): Promise<EnrichmentPayload> => {
   const current = payload.firstScriptVideo
-  if (!current.jobId || current.status === 'completed' || current.status === 'failed') {
+  const twitterTerminal = payload.twitterStatus === 'completed' || payload.twitterStatus === 'failed'
+  if (
+    !current.jobId ||
+    current.status === 'completed' ||
+    current.status === 'failed' ||
+    (current.status === 'not_started' && twitterTerminal)
+  ) {
     return payload
   }
 
@@ -116,11 +112,15 @@ const refreshVideoStatus = async (payload: EnrichmentPayload): Promise<Enrichmen
         status: current.status === 'queued' || current.status === 'processing' ? current.status : 'processing',
         error: `Worker status unavailable: ${statusResult.error}`,
       },
+      warning: `Worker status unavailable: ${statusResult.error}`,
     }
   }
 
   return {
     ...payload,
+    stage: statusResult.stage ?? payload.stage,
+    twitterStatus: statusResult.twitterStatus ?? payload.twitterStatus,
+    twitterPosts: statusResult.twitterPosts?.length ? statusResult.twitterPosts : payload.twitterPosts,
     firstScriptVideo: {
       status: statusResult.status,
       jobId: current.jobId,
@@ -153,9 +153,19 @@ const getPersistedEnrichment = async (runId: string): Promise<PersistedLookup> =
     return {
       kind: 'found',
       payload: {
-        twitterPosts: (response.data.twitter_posts_json as Array<{ scriptId: string; text: string }>) ?? [],
+        runId,
+        stage:
+          response.data.video_status === 'completed'
+            ? 'completed'
+            : response.data.video_status === 'failed'
+              ? 'failed'
+              : response.data.video_status === 'not_started'
+                ? 'twitter'
+                : 'video',
+        twitterStatus: normalizeTwitterState(response.data.twitter_posts_json).status,
+        twitterPosts: normalizeTwitterState(response.data.twitter_posts_json).posts,
         firstScriptVideo: {
-          status: response.data.video_status ?? 'queued',
+          status: response.data.video_status ?? (response.data.video_job_id ? 'queued' : 'not_started'),
           jobId: response.data.video_job_id ?? undefined,
           publicUrl: response.data.video_url ?? undefined,
           error: response.data.video_error ?? undefined,
@@ -184,6 +194,14 @@ export default async function handler(request: Request): Promise<Response> {
     const fallbackRun = getRun(runId)
     if (fallbackRun?.enrichment) {
       const refreshed = await refreshVideoStatus({
+        runId,
+        stage:
+          fallbackRun.enrichment.firstScriptVideo?.status === 'completed'
+            ? 'completed'
+            : fallbackRun.enrichment.firstScriptVideo?.status === 'not_started'
+              ? 'twitter'
+              : 'video',
+        twitterStatus: fallbackRun.enrichment.twitterPosts?.length ? 'completed' : 'pending',
         twitterPosts: fallbackRun.enrichment.twitterPosts ?? [],
         firstScriptVideo: fallbackRun.enrichment.firstScriptVideo ?? { status: 'failed', error: 'Missing video state.' },
       })
@@ -202,9 +220,13 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     const refreshed = await refreshVideoStatus(persistedLookup.payload)
-    const persistResult = await maybePersistEnrichment(runId, refreshed)
-    if ('reason' in persistResult) {
-      return json({ ...refreshed, warning: persistResult.reason })
+    const shouldPersist =
+      refreshed.firstScriptVideo.status === 'completed' ||
+      refreshed.firstScriptVideo.status === 'failed' ||
+      refreshed.twitterStatus === 'completed' ||
+      refreshed.twitterStatus === 'failed'
+    if (shouldPersist) {
+      await maybePersistEnrichment(runId, refreshed)
     }
     return json(refreshed)
   } catch (error) {
