@@ -1,6 +1,12 @@
 const http = require('http')
 const crypto = require('crypto')
 const { URL } = require('url')
+const path = require('path')
+const dotenv = require('dotenv')
+
+// Load root env first, then video-creation env for pipeline-specific keys.
+dotenv.config({ path: path.resolve(process.cwd(), '.env') })
+dotenv.config({ path: path.resolve(process.cwd(), 'video-creation', '.env') })
 
 const port = Number(process.env.PORT || 10000)
 const workerSecret = process.env.RENDER_VIDEO_WORKER_SECRET || ''
