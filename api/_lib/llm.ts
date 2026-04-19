@@ -1,7 +1,7 @@
 import { normalizeBaseUrl } from './http.js'
-import { buildRepairPrompt, buildScriptsPrompt, buildTopicsPrompt } from './prompts.js'
+import { buildRepairPrompt, buildScriptsPrompt, buildTopicsPrompt, buildTwitterPostsPrompt } from './prompts.js'
 import { optionalEnv } from './supabase.js'
-import type { LlmUsage, TopicCandidate, VideoScript } from './types.js'
+import type { LlmUsage, TopicCandidate, TwitterPost, VideoScript } from './types.js'
 
 const getConfig = () => ({
   baseUrl: normalizeBaseUrl(optionalEnv('LLM_BASE_URL'), 'https://opencode.ai/zen/v1'),
@@ -116,7 +116,15 @@ const fallbackScripts = (count: number): VideoScript[] =>
       'Actionable step viewers can apply immediately.',
     ],
     cta: 'Comment if you want part 2.',
+    voiceoverScript:
+      'Most people get this wrong. Here is the quick truth. Why this topic matters right now, one key insight from current market content, and an actionable step you can apply immediately. Comment if you want part two.',
     durationSec: 45,
+  }))
+
+const fallbackTwitterPosts = (scripts: VideoScript[]): TwitterPost[] =>
+  scripts.map((script, index) => ({
+    scriptIndex: index + 1,
+    text: `${script.hook} ${script.cta}`.slice(0, 270),
   }))
 
 export const generateTopics = async (input: {
@@ -183,10 +191,57 @@ export const generateScripts = async (input: {
         ...script,
         durationSec: Math.max(30, Math.min(60, script.durationSec ?? 45)),
         bodyPoints: (script.bodyPoints ?? []).slice(0, 4),
+        voiceoverScript:
+          script.voiceoverScript?.trim() ||
+          `${script.hook} ${(script.bodyPoints ?? []).join(' ')} ${script.cta}`.trim(),
       })),
       usage: parseUsage(payload),
     }
   } catch {
     return { scripts: fallbackScripts(count) }
+  }
+}
+
+export const generateTwitterPosts = async (input: {
+  brandBrief: string
+  scripts: VideoScript[]
+}) => {
+  if (!input.scripts.length) {
+    return { posts: [] as TwitterPost[] }
+  }
+
+  const prompt = buildTwitterPostsPrompt({
+    brandBrief: input.brandBrief,
+    scripts: input.scripts,
+  })
+
+  try {
+    const payload = await callResponses(prompt)
+    let parsed = parseJson<{ posts?: TwitterPost[] }>(extractResponseText(payload))
+
+    if (!parsed) {
+      const repaired = await callResponses(buildRepairPrompt(extractResponseText(payload)))
+      parsed = parseJson<{ posts?: TwitterPost[] }>(extractResponseText(repaired))
+    }
+
+    const posts = parsed?.posts?.filter(Boolean)
+    if (!posts?.length) {
+      return { posts: fallbackTwitterPosts(input.scripts) }
+    }
+
+    const normalizedPosts = posts
+      .slice(0, input.scripts.length)
+      .map((post, index) => ({
+        scriptIndex: post.scriptIndex || index + 1,
+        text: (post.text ?? '').trim().slice(0, 280),
+      }))
+      .filter((post) => post.text.length > 0)
+
+    return {
+      posts: normalizedPosts.length ? normalizedPosts : fallbackTwitterPosts(input.scripts),
+      usage: parseUsage(payload),
+    }
+  } catch {
+    return { posts: fallbackTwitterPosts(input.scripts) }
   }
 }

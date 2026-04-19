@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 
 import { GeneratePage } from '@/pages/GeneratePage'
@@ -9,6 +10,18 @@ const navClassName = ({ isActive }: { isActive: boolean }) =>
   }`
 
 function App() {
+  useEffect(() => {
+    const healthUrl = import.meta.env.VITE_RENDER_WORKER_HEALTH_URL?.trim()
+    if (!healthUrl) {
+      return
+    }
+
+    // Fire-and-forget warmup ping to wake sleeping worker instances.
+    void fetch(healthUrl).catch(() => {
+      // Ignore warmup errors; the app should stay usable.
+    })
+  }, [])
+
   return (
     <main className="min-h-screen bg-background">
       <header className="border-b bg-card/60 backdrop-blur">

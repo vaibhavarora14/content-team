@@ -29,6 +29,7 @@ export function KeywordSearchForm(props: KeywordSearchFormProps) {
             <Label htmlFor="brand-brief">Brand brief</Label>
             <Textarea
               id="brand-brief"
+              className="max-h-64 overflow-y-auto resize-y"
               value={props.brandBrief}
               onChange={(event) => props.onBrandBriefChange(event.target.value)}
               placeholder="Example: We sell protein bars for busy professionals who want clean ingredients and sustained energy."

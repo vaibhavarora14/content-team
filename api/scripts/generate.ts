@@ -105,6 +105,7 @@ export default async function handler(request: Request): Promise<Response> {
       hook: string
       bodyPoints: string[]
       cta: string
+      voiceoverScript?: string
       durationSec: number
     }> = []
 
@@ -117,6 +118,7 @@ export default async function handler(request: Request): Promise<Response> {
         hook: script.hook,
         bodyPoints: script.bodyPoints,
         cta: script.cta,
+        voiceoverScript: script.voiceoverScript,
         durationSec: script.durationSec,
       }))
     } else {
@@ -152,12 +154,13 @@ export default async function handler(request: Request): Promise<Response> {
         })
         .eq('id', runId)
 
-      responseScripts = (scripts ?? []).map((script) => ({
+      responseScripts = (scripts ?? []).map((script, index) => ({
         id: script.id,
         title: script.title,
         hook: script.hook,
         bodyPoints: (script.body_points as string[]) ?? [],
         cta: script.cta,
+        voiceoverScript: generation.scripts[index]?.voiceoverScript,
         durationSec: script.duration_sec,
       }))
     }

@@ -11,7 +11,10 @@ const routeTable = [
   { pattern: /^\/api\/research\/scrape\/?$/, modulePath: '/api/research/scrape.ts' },
   { pattern: /^\/api\/topics\/extract\/?$/, modulePath: '/api/topics/extract.ts' },
   { pattern: /^\/api\/scripts\/generate\/?$/, modulePath: '/api/scripts/generate.ts' },
+  { pattern: /^\/api\/scripts\/enrich\/?$/, modulePath: '/api/scripts/enrich.ts' },
+  { pattern: /^\/api\/scripts\/enrich-status\/?$/, modulePath: '/api/scripts/enrich-status.ts' },
   { pattern: /^\/api\/runs\/?$/, modulePath: '/api/runs/index.ts' },
+  { pattern: /^\/api\/runs\/get\/?$/, modulePath: '/api/runs/get.ts' },
   { pattern: /^\/api\/runs\/[^/]+\/?$/, modulePath: '/api/runs/[id].ts' },
 ]
 

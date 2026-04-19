@@ -44,20 +44,76 @@ const createInitialSteps = (): RunStepState[] => [
   { key: 'scrape', label: 'Scrape top links', status: 'pending' },
   { key: 'topics', label: 'Extract topic angles', status: 'pending' },
   { key: 'scripts', label: 'Generate scripts', status: 'pending' },
+  { key: 'enrich', label: 'Generate video and Twitter posts', status: 'pending' },
 ]
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+type EnrichmentPayload = {
+  twitterPosts?: Array<{ scriptId: string; text: string }>
+  firstScriptVideo?: {
+    status: 'queued' | 'processing' | 'completed' | 'failed'
+    jobId?: string
+    publicUrl?: string
+    error?: string
+  }
+  warnings?: string[]
+  warning?: string
+  error?: string
+}
 
 export function GeneratePage() {
   const [brandBrief, setBrandBrief] = useState('')
   const [scripts, setScripts] = useState<VideoScript[]>([])
   const [runId, setRunId] = useState('')
   const [steps, setSteps] = useState<RunStepState[]>(createInitialSteps)
-  const [isStepsExpanded, setIsStepsExpanded] = useState(false)
+  const [isStepsExpanded, setIsStepsExpanded] = useState(true)
   const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
   const [statusText, setStatusText] = useState('Ready')
   const [errorText, setErrorText] = useState('')
   const apiBase = useMemo(() => getApiBase(), [])
   const hasRunActivity =
     isGeneratingFlow || runId.length > 0 || steps.some((step) => step.status !== 'pending')
+
+  const setStepStatus = (key: RunStepKey, status: RunStepState['status']) => {
+    setSteps((previous) =>
+      previous.map((step) => {
+        if (step.key === key) {
+          return { ...step, status }
+        }
+        return step
+      })
+    )
+  }
+
+  const mergeEnrichment = (
+    generatedScripts: VideoScript[],
+    enrichment: EnrichmentPayload
+  ) => {
+    const twitterByScriptId = new Map(
+      (enrichment.twitterPosts ?? []).map((post) => [post.scriptId, post.text])
+    )
+
+    return generatedScripts.map((script, index) => {
+      if (index !== 0) {
+        const nextTwitter = twitterByScriptId.get(script.id)
+        return {
+          ...script,
+          twitterPost: nextTwitter ?? script.twitterPost,
+        }
+      }
+
+      const nextTwitter = twitterByScriptId.get(script.id)
+      return {
+        ...script,
+        twitterPost: nextTwitter ?? script.twitterPost,
+        videoStatus: enrichment.firstScriptVideo?.status ?? script.videoStatus,
+        videoJobId: enrichment.firstScriptVideo?.jobId ?? script.videoJobId,
+        videoUrl: enrichment.firstScriptVideo?.publicUrl ?? script.videoUrl,
+        videoError: enrichment.firstScriptVideo?.error ?? script.videoError,
+      }
+    })
+  }
 
   const runGenerationFlow = async (nextBrandBrief: string) => {
     setIsGeneratingFlow(true)
@@ -67,7 +123,7 @@ export function GeneratePage() {
     setSteps(createInitialSteps())
     setIsStepsExpanded(true)
 
-    type FlowStage = 'search' | 'scrape' | 'topics' | 'scripts'
+    type FlowStage = 'search' | 'scrape' | 'topics' | 'scripts' | 'enrich'
     let stage: FlowStage = 'search'
 
     try {
@@ -150,7 +206,102 @@ export function GeneratePage() {
       const generatedScripts = scriptsPayload.scripts ?? []
       setScripts(generatedScripts)
       setStepStatus('scripts', 'completed')
-      setStatusText(`Scripts generated (${generatedScripts.length}).`)
+
+      stage = 'enrich'
+      setStepStatus('enrich', 'in_progress')
+      setStatusText('Generating Twitter posts and video from script #1...')
+
+      const enrichResponse = await fetch(`${apiBase}/api/scripts/enrich`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          runId: nextRunId,
+          scripts: generatedScripts,
+        }),
+      })
+
+      if (!enrichResponse.ok) {
+        throw new Error(`Request failed with ${enrichResponse.status}`)
+      }
+
+      const enrichPayload = (await enrichResponse.json()) as EnrichmentPayload
+      const enrichedScripts = mergeEnrichment(generatedScripts, enrichPayload)
+      setScripts(enrichedScripts)
+
+      if (enrichPayload.warnings?.length || enrichPayload.warning) {
+        setErrorText(
+          [
+            ...(enrichPayload.warnings ?? []),
+            ...(enrichPayload.warning ? [enrichPayload.warning] : []),
+          ].join(' ')
+        )
+      }
+
+      let finalVideoStatus = enrichPayload.firstScriptVideo?.status
+      if (finalVideoStatus === 'failed') {
+        setStepStatus('enrich', 'failed')
+        setStatusText('Twitter posts generated, but video generation failed.')
+      } else {
+        setStatusText('Twitter posts generated. Video job queued, waiting for updates...')
+        let statusPollFailures = 0
+        let successfulStatusPolls = 0
+
+        for (let attempt = 1; attempt <= 40; attempt++) {
+          await sleep(4000)
+
+          const statusResponse = await fetch(
+            `${apiBase}/api/scripts/enrich-status?runId=${encodeURIComponent(nextRunId)}`
+          )
+          if (!statusResponse.ok) {
+            statusPollFailures += 1
+            setStatusText(
+              `Waiting for video updates... (status poll failed: ${statusResponse.status})`
+            )
+            if (statusPollFailures >= 5) {
+              setStepStatus('enrich', 'failed')
+              setErrorText(
+                'Could not fetch enrichment status repeatedly. Please refresh Runs to retry.'
+              )
+              break
+            }
+            continue
+          }
+
+          const statusPayload = (await statusResponse.json()) as EnrichmentPayload
+          statusPollFailures = 0
+          successfulStatusPolls += 1
+          setScripts((previous) => mergeEnrichment(previous, statusPayload))
+          finalVideoStatus = statusPayload.firstScriptVideo?.status
+
+          if (finalVideoStatus === 'completed') {
+            setStepStatus('enrich', 'completed')
+            setStatusText(
+              `Scripts generated (${generatedScripts.length}) with video + Twitter posts.`
+            )
+            break
+          }
+
+          if (finalVideoStatus === 'failed') {
+            setStepStatus('enrich', 'failed')
+            setStatusText('Twitter posts generated, but video generation failed.')
+            break
+          }
+
+          setStatusText(`Twitter posts ready. Video is ${finalVideoStatus ?? 'queued'}...`)
+        }
+
+        if (finalVideoStatus !== 'completed' && finalVideoStatus !== 'failed') {
+          setStepStatus('enrich', 'failed')
+          if (!successfulStatusPolls) {
+            setErrorText('Unable to retrieve enrichment status from the server.')
+            setStatusText('Twitter/video status could not be confirmed. Please check Runs and retry.')
+          } else {
+            setStatusText('Video status did not finish in time. Refresh Runs later for the final link.')
+          }
+        }
+      }
     } catch (error) {
       const stageLabel =
         stage === 'search'
@@ -159,7 +310,9 @@ export function GeneratePage() {
             ? 'source scraping'
             : stage === 'topics'
               ? 'topic extraction'
-              : 'script generation'
+              : stage === 'scripts'
+                ? 'script generation'
+                : 'enrichment'
 
       setStepStatus(stage, 'failed')
       setErrorText(error instanceof Error ? error.message : `Failed during ${stageLabel}.`)
@@ -167,17 +320,6 @@ export function GeneratePage() {
     } finally {
       setIsGeneratingFlow(false)
     }
-  }
-
-  const setStepStatus = (key: RunStepKey, status: RunStepState['status']) => {
-    setSteps((previous) =>
-      previous.map((step) => {
-        if (step.key === key) {
-          return { ...step, status }
-        }
-        return step
-      })
-    )
   }
 
   const onSubmitBrief = async (event: FormEvent<HTMLFormElement>) => {

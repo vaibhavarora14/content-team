@@ -56,7 +56,7 @@ export function RunsPage() {
     setStatusText('Loading run snapshot...')
 
     try {
-      const response = await fetch(`${apiBase}/api/runs/${nextRunId}`)
+      const response = await fetch(`${apiBase}/api/runs/get?runId=${encodeURIComponent(nextRunId)}`)
       if (!response.ok) {
         throw new Error(`Request failed with ${response.status}`)
       }
@@ -71,19 +71,51 @@ export function RunsPage() {
           cta: string
           duration_sec: number
         }>
+        enrichment?: {
+          twitterPosts?: Array<{ scriptId: string; text: string }>
+          firstScriptVideo?: {
+            status: 'queued' | 'processing' | 'completed' | 'failed'
+            jobId?: string
+            publicUrl?: string
+            error?: string
+          }
+        } | null
       }
 
-      setScripts(
-        (payload.videoScripts ?? []).map((script) => ({
-          id: script.id,
-          title: script.title,
-          hook: script.hook,
-          bodyPoints: script.body_points ?? [],
-          cta: script.cta,
-          durationSec: script.duration_sec,
-        }))
+      const twitterByScriptId = new Map(
+        (payload.enrichment?.twitterPosts ?? []).map((post) => [post.scriptId, post.text])
       )
-      setStatusText(`Loaded run ${payload.run.id}.`)
+
+      setScripts(
+        (payload.videoScripts ?? []).map((script, index) => {
+          const baseScript: VideoScript = {
+            id: script.id,
+            title: script.title,
+            hook: script.hook,
+            bodyPoints: script.body_points ?? [],
+            cta: script.cta,
+            durationSec: script.duration_sec,
+            twitterPost: twitterByScriptId.get(script.id),
+          }
+
+          if (index !== 0) {
+            return baseScript
+          }
+
+          return {
+            ...baseScript,
+            videoStatus: payload.enrichment?.firstScriptVideo?.status,
+            videoJobId: payload.enrichment?.firstScriptVideo?.jobId,
+            videoUrl: payload.enrichment?.firstScriptVideo?.publicUrl,
+            videoError: payload.enrichment?.firstScriptVideo?.error,
+          }
+        })
+      )
+      if (!payload.enrichment) {
+        setStatusText(`Loaded run ${payload.run.id}. Enrichment has not been stored yet.`)
+      } else {
+        setStatusText(`Loaded run ${payload.run.id}.`)
+      }
     } catch (error) {
       setStatusText(error instanceof Error ? error.message : 'Run load failed.')
     } finally {

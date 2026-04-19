@@ -35,7 +35,8 @@ export const buildScriptsPrompt = (input: {
   topics: Array<{ title: string; angle: string; whyNow: string }>
   count: number
 }) => `
-You are a short-form script writer.
+You are a short-form script writer for Instagram Reels.
+Write every script for a claymation-style video concept.
 Output strict JSON only.
 
 Schema:
@@ -46,6 +47,7 @@ Schema:
       "hook": "string",
       "bodyPoints": ["string", "string", "string"],
       "cta": "string",
+      "voiceoverScript": "string",
       "durationSec": 30
     }
   ]
@@ -54,14 +56,59 @@ Schema:
 Rules:
 - Return exactly ${input.count} scripts.
 - bodyPoints length must be 3 or 4.
-- durationSec must be between 30 and 60.
+- durationSec must be exactly 30.
 - Keep script angles distinct.
+- Each script should feel native to Instagram Reels: punchy hook, fast pacing, and clear payoff.
+- Use language that suits a claymation-style reel (playful, visual, tactile moments) without adding production instructions outside JSON schema.
+- voiceoverScript must be narration-ready plain text for a natural 30-second voiceover (no stage directions, timestamps, or bullet points).
 
 Brand brief:
 ${input.brandBrief}
 
 Topics:
 ${input.topics.map((topic, index) => `${index + 1}. ${topic.title} | ${topic.angle} | ${topic.whyNow}`).join('\n')}
+`.trim()
+
+export const buildTwitterPostsPrompt = (input: {
+  brandBrief: string
+  scripts: Array<{
+    title: string
+    hook: string
+    bodyPoints: string[]
+    cta: string
+  }>
+}) => `
+You are a social media writer for X (Twitter).
+Output strict JSON only.
+
+Schema:
+{
+  "posts": [
+    {
+      "scriptIndex": 1,
+      "text": "string"
+    }
+  ]
+}
+
+Rules:
+- Return exactly ${input.scripts.length} posts.
+- scriptIndex starts from 1 and must map 1:1 with input scripts order.
+- Each post should be concise and engaging.
+- Keep each post under 280 characters.
+- Do not use hashtags unless they are highly relevant.
+- Do not include URLs.
+
+Brand brief:
+${input.brandBrief}
+
+Scripts:
+${input.scripts
+  .map(
+    (script, index) =>
+      `${index + 1}. ${script.title}\nHook: ${script.hook}\nBody: ${script.bodyPoints.join(' | ')}\nCTA: ${script.cta}`
+  )
+  .join('\n\n')}
 `.trim()
 
 export const buildRepairPrompt = (raw: string) => `

@@ -8,8 +8,7 @@ export const config = {
 
 const getRunIdFromRequest = (request: Request) => {
   const url = new URL(request.url)
-  const segments = url.pathname.split('/').filter(Boolean)
-  return segments[segments.length - 1] ?? ''
+  return (url.searchParams.get('runId') ?? '').trim()
 }
 
 export default async function handler(request: Request): Promise<Response> {
@@ -78,22 +77,21 @@ export default async function handler(request: Request): Promise<Response> {
       topicCandidatesResponse,
       videoScriptsResponse,
       enrichmentResponse,
-    ] =
-      await Promise.all([
-        supabase
-          .from('source_results')
-          .select('*')
-          .eq('run_id', runId)
-          .order('rank', { ascending: true }),
-        supabase.from('source_documents').select('*').eq('run_id', runId),
-        supabase
-          .from('topic_candidates')
-          .select('*')
-          .eq('run_id', runId)
-          .order('confidence', { ascending: false }),
-        supabase.from('video_scripts').select('*').eq('run_id', runId),
-        supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
-      ])
+    ] = await Promise.all([
+      supabase
+        .from('source_results')
+        .select('*')
+        .eq('run_id', runId)
+        .order('rank', { ascending: true }),
+      supabase.from('source_documents').select('*').eq('run_id', runId),
+      supabase
+        .from('topic_candidates')
+        .select('*')
+        .eq('run_id', runId)
+        .order('confidence', { ascending: false }),
+      supabase.from('video_scripts').select('*').eq('run_id', runId),
+      supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
+    ])
 
     const queryErrors = [
       sourceResultsResponse.error,

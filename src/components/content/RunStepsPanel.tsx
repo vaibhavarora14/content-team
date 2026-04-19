@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 
-export type RunStepKey = 'search' | 'scrape' | 'topics' | 'scripts'
+export type RunStepKey = 'search' | 'scrape' | 'topics' | 'scripts' | 'enrich'
 export type RunStepStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 
 export type RunStepState = {
@@ -30,6 +30,21 @@ const statusClassName: Record<RunStepStatus, string> = {
   failed: 'text-destructive',
 }
 
+const stepDetailByKey: Record<RunStepKey, string> = {
+  search: 'Build search queries and collect top sources from the web.',
+  scrape: 'Open selected links and extract relevant source text.',
+  topics: 'Cluster evidence into high-signal content angles.',
+  scripts: 'Generate 5 scripts from topics with hooks, body points, and CTAs.',
+  enrich: 'Create Twitter posts and track first-script video generation.',
+}
+
+const statusDetailByState: Record<RunStepStatus, string> = {
+  pending: 'Not started yet.',
+  in_progress: 'Currently running.',
+  completed: 'Finished successfully.',
+  failed: 'Stopped due to an error.',
+}
+
 export function RunStepsPanel(props: RunStepsPanelProps) {
   const completedCount = props.steps.filter((step) => step.status === 'completed').length
   const inProgressCount = props.steps.filter((step) => step.status === 'in_progress').length
@@ -52,13 +67,17 @@ export function RunStepsPanel(props: RunStepsPanelProps) {
       {props.isExpanded ? (
         <ol className="mt-3 space-y-2">
           {props.steps.map((step, index) => (
-            <li className="flex items-center justify-between rounded-md border px-3 py-2" key={step.key}>
-              <span className="text-sm">
-                {index + 1}. {step.label}
-              </span>
-              <span className={`text-xs font-medium ${statusClassName[step.status]}`}>
-                {statusLabel[step.status]}
-              </span>
+            <li className="rounded-md border px-3 py-2" key={step.key}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm">
+                  {index + 1}. {step.label}
+                </span>
+                <span className={`text-xs font-medium ${statusClassName[step.status]}`}>
+                  {statusLabel[step.status]}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{stepDetailByKey[step.key]}</p>
+              <p className="text-xs text-muted-foreground">{statusDetailByState[step.status]}</p>
             </li>
           ))}
         </ol>
