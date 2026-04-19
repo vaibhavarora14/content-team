@@ -47,6 +47,7 @@ Schema:
       "hook": "string",
       "bodyPoints": ["string", "string", "string"],
       "cta": "string",
+      "voiceoverScript": "string",
       "durationSec": 30
     }
   ]
@@ -59,6 +60,7 @@ Rules:
 - Keep script angles distinct.
 - Each script should feel native to Instagram Reels: punchy hook, fast pacing, and clear payoff.
 - Use language that suits a claymation-style reel (playful, visual, tactile moments) without adding production instructions outside JSON schema.
+- voiceoverScript must be narration-ready plain text for a natural 30-second voiceover (no stage directions, timestamps, or bullet points).
 
 Brand brief:
 ${input.brandBrief}

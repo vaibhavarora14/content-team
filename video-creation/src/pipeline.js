@@ -5,6 +5,7 @@ const path = require('path');
 const { generateStoryboardImages } = require('./functions/breakdown');
 const { generateVideoClips } = require('./functions/videoGen');
 const { stitchReel } = require('./functions/stitch');
+const { generateVoiceoverAudio } = require('./functions/voiceover');
 const { uploadLocalFile, uploadWithRetry } = require('./utils/kieFileUpload');
 const { setStateKey } = require('./utils/saveState');
 
@@ -37,13 +38,22 @@ async function runReelPipeline(script, outputPath = path.resolve(process.cwd(), 
   const videoUrls = await generateVideoClips(imageUrls);
   console.log('\n✅ Step 2 complete — Video clips generated.\n');
 
-  // Step 3: Stitch with ffmpeg
-  await fs.ensureDir(path.dirname(outputPath));
-  const finalPath = await stitchReel(videoUrls, outputPath);
-  console.log('\n✅ Step 3 complete — Final Reel rendered.\n');
+  // Step 3: Voiceover Audio
+  let voiceoverUrl = null;
+  try {
+    voiceoverUrl = await generateVoiceoverAudio(script);
+    console.log('\n✅ Step 3 complete — Voiceover generated.\n');
+  } catch (voiceoverError) {
+    console.warn('\n⚠️  Step 3 failed — Could not generate voiceover:', voiceoverError.message);
+  }
 
-  // Step 4: Upload final reel to Kie AI for easy sharing
-  console.log('[Step 4] Uploading final reel to Kie AI...');
+  // Step 4: Stitch with ffmpeg
+  await fs.ensureDir(path.dirname(outputPath));
+  const finalPath = await stitchReel(videoUrls, outputPath, voiceoverUrl || undefined);
+  console.log('\n✅ Step 4 complete — Final Reel rendered.\n');
+
+  // Step 5: Upload final reel to Kie AI for easy sharing
+  console.log('[Step 5] Uploading final reel to Kie AI...');
   let uploadedReel = null;
   try {
     uploadedReel = await uploadWithRetry(
@@ -51,9 +61,9 @@ async function runReelPipeline(script, outputPath = path.resolve(process.cwd(), 
       3
     );
     await setStateKey('finalReelUrl', uploadedReel.fileUrl);
-    console.log('\n✅ Step 4 complete — Final reel uploaded.\n');
+    console.log('\n✅ Step 5 complete — Final reel uploaded.\n');
   } catch (uploadErr) {
-    console.warn('\n⚠️  Step 4 failed — Could not upload final reel:', uploadErr.message);
+    console.warn('\n⚠️  Step 5 failed — Could not upload final reel:', uploadErr.message);
   }
 
   console.log('========================================');

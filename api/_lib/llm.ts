@@ -116,6 +116,8 @@ const fallbackScripts = (count: number): VideoScript[] =>
       'Actionable step viewers can apply immediately.',
     ],
     cta: 'Comment if you want part 2.',
+    voiceoverScript:
+      'Most people get this wrong. Here is the quick truth. Why this topic matters right now, one key insight from current market content, and an actionable step you can apply immediately. Comment if you want part two.',
     durationSec: 45,
   }))
 
@@ -189,6 +191,9 @@ export const generateScripts = async (input: {
         ...script,
         durationSec: Math.max(30, Math.min(60, script.durationSec ?? 45)),
         bodyPoints: (script.bodyPoints ?? []).slice(0, 4),
+        voiceoverScript:
+          script.voiceoverScript?.trim() ||
+          `${script.hook} ${(script.bodyPoints ?? []).join(' ')} ${script.cta}`.trim(),
       })),
       usage: parseUsage(payload),
     }

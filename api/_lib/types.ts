@@ -34,6 +34,7 @@ export type VideoScript = {
   bodyPoints: string[]
   cta: string
   durationSec: number
+  voiceoverScript?: string
 }
 
 export type TwitterPost = {

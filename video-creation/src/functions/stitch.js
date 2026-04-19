@@ -6,6 +6,7 @@ const { downloadAsset } = require('../utils/downloadAsset');
 
 const OUTPUT_DIR = path.resolve(process.cwd(), 'output');
 const VIDEOS_DIR = path.resolve(OUTPUT_DIR, 'videos');
+const AUDIO_DIR = path.resolve(OUTPUT_DIR, 'audio');
 const TEMP_DIR = path.resolve(OUTPUT_DIR, 'temp-stitch');
 
 /**
@@ -38,6 +39,27 @@ async function normalizeClip(inputPath, outputPath) {
   });
 }
 
+async function applyVoiceover(videoPath, voiceoverPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(videoPath)
+      .input(voiceoverPath)
+      .outputOptions([
+        '-map 0:v:0',
+        '-map 1:a:0',
+        '-c:v copy',
+        '-c:a aac',
+        '-shortest',
+        '-movflags +faststart',
+      ])
+      .on('end', () => resolve())
+      .on('error', (err) => {
+        reject(new Error(`Failed to apply voiceover audio: ${err.message}`));
+      })
+      .save(outputPath);
+  });
+}
+
 /**
  * Function 3: Stitching with ffmpeg
  * - Downloads 5 video clips locally.
@@ -46,9 +68,10 @@ async function normalizeClip(inputPath, outputPath) {
  *
  * @param {string[]} videoUrls - Array of 5 video clip URLs.
  * @param {string} outputPath - Final output file path.
+ * @param {string} voiceoverUrl - Optional generated voiceover URL.
  * @returns {Promise<string>} - Absolute path to the rendered video.
  */
-async function stitchReel(videoUrls, outputPath = path.join(OUTPUT_DIR, 'final-reel.mp4')) {
+async function stitchReel(videoUrls, outputPath = path.join(OUTPUT_DIR, 'final-reel.mp4'), voiceoverUrl) {
   if (!Array.isArray(videoUrls) || videoUrls.length < 5) {
     throw new Error(`Expected 5 video URLs, got ${videoUrls?.length}`);
   }
@@ -56,6 +79,7 @@ async function stitchReel(videoUrls, outputPath = path.join(OUTPUT_DIR, 'final-r
   console.log('[Function 3] Preparing output directories...');
   await fs.ensureDir(OUTPUT_DIR);
   await fs.ensureDir(VIDEOS_DIR);
+  await fs.ensureDir(AUDIO_DIR);
   await fs.ensureDir(TEMP_DIR);
 
   // Use locally saved clips if available, otherwise download
@@ -90,6 +114,7 @@ async function stitchReel(videoUrls, outputPath = path.join(OUTPUT_DIR, 'final-r
 
   // Concatenate with ffmpeg using copy mode (fast, no re-encode)
   console.log('[Function 3] Stitching clips with ffmpeg...');
+  const stitchedPath = path.join(TEMP_DIR, 'stitched-silent.mp4');
   await new Promise((resolve, reject) => {
     ffmpeg()
       .input(concatListPath)
@@ -107,8 +132,20 @@ async function stitchReel(videoUrls, outputPath = path.join(OUTPUT_DIR, 'final-r
       .on('error', (err) => {
         reject(new Error(`ffmpeg stitching failed: ${err.message}`));
       })
-      .save(outputPath);
+      .save(stitchedPath);
   });
+
+  if (voiceoverUrl) {
+    console.log('[Function 3] Applying generated voiceover audio...');
+    let voiceoverPath = await getStateKey('voiceoverAudioPath');
+    if (!voiceoverPath || !(await fs.pathExists(voiceoverPath))) {
+      voiceoverPath = path.join(AUDIO_DIR, 'voiceover.mp3');
+      await downloadAsset(voiceoverUrl, voiceoverPath);
+    }
+    await applyVoiceover(stitchedPath, voiceoverPath, outputPath);
+  } else {
+    await fs.copyFile(stitchedPath, outputPath);
+  }
 
   // Cleanup temp files
   console.log('[Function 3] Cleaning up temporary files...');

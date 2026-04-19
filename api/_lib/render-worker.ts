@@ -37,7 +37,9 @@ type WorkerStatusResponse = {
 }
 
 const buildNarrationScript = (script: VideoScript) =>
-  `${script.title}
+  script.voiceoverScript?.trim()
+    ? script.voiceoverScript.trim()
+    : `${script.title}
 
 Hook: ${script.hook}
 Body:
