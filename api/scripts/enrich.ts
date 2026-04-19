@@ -21,6 +21,26 @@ type FirstScriptVideo = {
   error?: string
 }
 
+const withTimeout = async <T>(
+  task: Promise<T>,
+  timeoutMs: number,
+  fallbackValue: T
+): Promise<T> => {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(fallbackValue), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle)
+    }
+  }
+}
+
 const maybePersistEnrichment = async (
   runId: string,
   payload: {
@@ -102,10 +122,19 @@ export default async function handler(request: Request): Promise<Response> {
       }
     }
 
-    const twitter = await generateTwitterPosts({
-      brandBrief,
-      scripts,
-    })
+    const twitter = await withTimeout(
+      generateTwitterPosts({
+        brandBrief,
+        scripts,
+      }),
+      18000,
+      {
+        posts: scripts.map((script, index) => ({
+          scriptIndex: index + 1,
+          text: `${script.hook} ${script.cta}`.trim().slice(0, 280),
+        })),
+      }
+    )
     const twitterPosts = scripts.map((script, index) => ({
       scriptId: script.id,
       text: twitter.posts.find((post) => post.scriptIndex === index + 1)?.text ?? '',
