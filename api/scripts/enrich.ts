@@ -118,7 +118,15 @@ const maybePersistEnrichment = async (
 const getExistingEnrichment = async (runId: string): Promise<ExistingEnrichmentLookup> => {
   const fallbackRun = getRun(runId)
   if (fallbackRun?.enrichment) {
-    return { kind: 'found', enrichment: fallbackRun.enrichment }
+    return {
+      kind: 'found',
+      enrichment: {
+        twitterPosts: fallbackRun.enrichment.twitterPosts ?? [],
+        firstScriptVideo: fallbackRun.enrichment.firstScriptVideo ?? {
+          status: 'queued',
+        },
+      },
+    }
   }
 
   try {
@@ -126,7 +134,7 @@ const getExistingEnrichment = async (runId: string): Promise<ExistingEnrichmentL
     const response = (await withTimeoutOrNull(
       supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
       SUPABASE_TIMEOUT_MS
-    )) as { data?: any } | null
+    )) as SupabaseResponse | null
 
     if (!response) {
       return { kind: 'unavailable', reason: 'Timed out checking existing enrichment.' }
@@ -227,16 +235,16 @@ export default async function handler(request: Request): Promise<Response> {
         existingLookup.enrichment.firstScriptVideo.status === 'processing')
 
     let firstScriptVideo: FirstScriptVideo
-    if (hasActiveVideoJob) {
+    if (hasActiveVideoJob && existingLookup.kind === 'found') {
       firstScriptVideo = {
-        status: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.status ?? 'queued' : 'queued',
-        jobId: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.jobId : undefined,
-        publicUrl: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.publicUrl : undefined,
-        error: existingLookup.kind === 'found' ? existingLookup.enrichment.firstScriptVideo?.error : undefined,
+        status: existingLookup.enrichment.firstScriptVideo?.status ?? 'queued',
+        jobId: existingLookup.enrichment.firstScriptVideo?.jobId,
+        publicUrl: existingLookup.enrichment.firstScriptVideo?.publicUrl,
+        error: existingLookup.enrichment.firstScriptVideo?.error,
       }
     } else {
       const renderResult = await createRenderVideoJob(runId, scripts[0])
-      if (!renderResult.ok) {
+      if ('error' in renderResult) {
         firstScriptVideo = {
           status: 'failed',
           error: renderResult.error,
@@ -256,7 +264,7 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     const persistResult = await maybePersistEnrichment(runId, payload)
-    if (!persistResult.ok) {
+    if ('reason' in persistResult) {
       warnings.push(persistResult.reason)
     }
 

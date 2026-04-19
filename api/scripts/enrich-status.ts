@@ -203,7 +203,7 @@ export default async function handler(request: Request): Promise<Response> {
 
     const refreshed = await refreshVideoStatus(persistedLookup.payload)
     const persistResult = await maybePersistEnrichment(runId, refreshed)
-    if (!persistResult.ok) {
+    if ('reason' in persistResult) {
       return json({ ...refreshed, warning: persistResult.reason })
     }
     return json(refreshed)
