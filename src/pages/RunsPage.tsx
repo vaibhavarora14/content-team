@@ -72,9 +72,11 @@ export function RunsPage() {
           duration_sec: number
         }>
         enrichment?: {
+          stage?: 'queued' | 'twitter' | 'video' | 'voiceover' | 'stitch' | 'upload' | 'completed' | 'failed'
+          twitterStatus?: 'pending' | 'processing' | 'completed' | 'failed'
           twitterPosts?: Array<{ scriptId: string; text: string }>
           firstScriptVideo?: {
-            status: 'queued' | 'processing' | 'completed' | 'failed'
+            status: 'not_started' | 'queued' | 'processing' | 'completed' | 'failed'
             jobId?: string
             publicUrl?: string
             error?: string
@@ -96,6 +98,8 @@ export function RunsPage() {
             cta: script.cta,
             durationSec: script.duration_sec,
             twitterPost: twitterByScriptId.get(script.id),
+            twitterStatus: payload.enrichment?.twitterStatus,
+            enrichmentStage: payload.enrichment?.stage,
           }
 
           if (index !== 0) {

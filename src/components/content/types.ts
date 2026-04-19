@@ -37,7 +37,9 @@ export type VideoScript = {
   durationSec: number
   voiceoverScript?: string
   twitterPost?: string
-  videoStatus?: 'queued' | 'processing' | 'completed' | 'failed'
+  twitterStatus?: 'pending' | 'processing' | 'completed' | 'failed'
+  videoStatus?: 'not_started' | 'queued' | 'processing' | 'completed' | 'failed'
+  enrichmentStage?: 'queued' | 'twitter' | 'video' | 'voiceover' | 'stitch' | 'upload' | 'completed' | 'failed'
   videoJobId?: string
   videoUrl?: string
   videoError?: string

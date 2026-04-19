@@ -21,7 +21,11 @@ const { setStateKey } = require('./utils/saveState');
  * @param {string} outputPath - Where to save the final MP4.
  * @returns {Promise<string>} - Absolute path to the final video.
  */
-async function runReelPipeline(script, outputPath = path.resolve(process.cwd(), 'output', 'final-reel.mp4')) {
+async function runReelPipeline(
+  script,
+  outputPath = path.resolve(process.cwd(), 'output', 'final-reel.mp4'),
+  onStageUpdate
+) {
   if (!script || typeof script !== 'string') {
     throw new Error('A valid script string is required.');
   }
@@ -30,14 +34,23 @@ async function runReelPipeline(script, outputPath = path.resolve(process.cwd(), 
   console.log('   Instagram Reel Pipeline Starting   ');
   console.log('========================================\n');
 
+  const updateStage = async (stage) => {
+    if (typeof onStageUpdate === 'function') {
+      await onStageUpdate(stage);
+    }
+  };
+
+  await updateStage('storyboard');
   // Step 1: Storyboard Images
   const imageUrls = await generateStoryboardImages(script);
   console.log('\n✅ Step 1 complete — Storyboard images generated.\n');
 
+  await updateStage('video');
   // Step 2: Video Clips
   const videoUrls = await generateVideoClips(imageUrls);
   console.log('\n✅ Step 2 complete — Video clips generated.\n');
 
+  await updateStage('voiceover');
   // Step 3: Voiceover Audio
   let voiceoverUrl = null;
   try {
@@ -47,11 +60,13 @@ async function runReelPipeline(script, outputPath = path.resolve(process.cwd(), 
     console.warn('\n⚠️  Step 3 failed — Could not generate voiceover:', voiceoverError.message);
   }
 
+  await updateStage('stitch');
   // Step 4: Stitch with ffmpeg
   await fs.ensureDir(path.dirname(outputPath));
   const finalPath = await stitchReel(videoUrls, outputPath, voiceoverUrl || undefined);
   console.log('\n✅ Step 4 complete — Final Reel rendered.\n');
 
+  await updateStage('upload');
   // Step 5: Upload final reel to Kie AI for easy sharing
   console.log('[Step 5] Uploading final reel to Kie AI...');
   let uploadedReel = null;
@@ -66,6 +81,7 @@ async function runReelPipeline(script, outputPath = path.resolve(process.cwd(), 
     console.warn('\n⚠️  Step 5 failed — Could not upload final reel:', uploadErr.message);
   }
 
+  await updateStage('completed');
   console.log('========================================');
   console.log('   Pipeline Finished Successfully!    ');
   console.log(`   Local:   ${finalPath}`);
