@@ -127,15 +127,17 @@ export default async function handler(request: Request): Promise<Response> {
       }
     } else {
       const renderResult = await createRenderVideoJob(runId, scripts[0])
-      firstScriptVideo = renderResult.ok
-        ? {
-            status: 'queued',
-            jobId: renderResult.jobId,
-          }
-        : {
-            status: 'failed',
-            error: renderResult.error,
-          }
+      if (renderResult.ok) {
+        firstScriptVideo = {
+          status: 'queued',
+          jobId: renderResult.jobId,
+        }
+      } else {
+        firstScriptVideo = {
+          status: 'failed',
+          error: renderResult.error,
+        }
+      }
     }
     const payload = { twitterPosts, firstScriptVideo }
 
