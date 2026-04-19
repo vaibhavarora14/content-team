@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 
-export type RunStepKey = 'search' | 'scrape' | 'topics' | 'scripts'
+export type RunStepKey = 'search' | 'scrape' | 'topics' | 'scripts' | 'enrich'
 export type RunStepStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 
 export type RunStepState = {

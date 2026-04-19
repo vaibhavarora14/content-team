@@ -36,6 +36,11 @@ export type VideoScript = {
   durationSec: number
 }
 
+export type TwitterPost = {
+  scriptIndex: number
+  text: string
+}
+
 export type LlmUsage = {
   inputTokens?: number
   outputTokens?: number

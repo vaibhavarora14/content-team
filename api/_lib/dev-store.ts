@@ -17,6 +17,15 @@ type RunRecord = {
   sourceDocuments: Array<SourceDocument & { id: string }>
   topicCandidates: Array<TopicCandidate & { id: string }>
   videoScripts: Array<VideoScript & { id: string }>
+  enrichment?: {
+    twitterPosts: Array<{ scriptId: string; text: string }>
+    firstScriptVideo?: {
+      status: 'queued' | 'processing' | 'completed' | 'failed'
+      jobId?: string
+      publicUrl?: string
+      error?: string
+    }
+  }
   createdAt: string
 }
 
@@ -128,4 +137,25 @@ export const setRunScripts = (id: string, scripts: VideoScript[]) => {
   }))
 
   return run.videoScripts
+}
+
+export const setRunEnrichment = (
+  id: string,
+  enrichment: {
+    twitterPosts: Array<{ scriptId: string; text: string }>
+    firstScriptVideo?: {
+      status: 'queued' | 'processing' | 'completed' | 'failed'
+      jobId?: string
+      publicUrl?: string
+      error?: string
+    }
+  }
+) => {
+  const run = getRun(id)
+  if (!run) {
+    return null
+  }
+
+  run.enrichment = enrichment
+  return run.enrichment
 }

@@ -35,4 +35,9 @@ export type VideoScript = {
   bodyPoints: string[]
   cta: string
   durationSec: number
+  twitterPost?: string
+  videoStatus?: 'queued' | 'processing' | 'completed' | 'failed'
+  videoJobId?: string
+  videoUrl?: string
+  videoError?: string
 }

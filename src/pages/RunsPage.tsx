@@ -71,17 +71,45 @@ export function RunsPage() {
           cta: string
           duration_sec: number
         }>
+        enrichment?: {
+          twitterPosts?: Array<{ scriptId: string; text: string }>
+          firstScriptVideo?: {
+            status: 'queued' | 'processing' | 'completed' | 'failed'
+            jobId?: string
+            publicUrl?: string
+            error?: string
+          }
+        } | null
       }
 
+      const twitterByScriptId = new Map(
+        (payload.enrichment?.twitterPosts ?? []).map((post) => [post.scriptId, post.text])
+      )
+
       setScripts(
-        (payload.videoScripts ?? []).map((script) => ({
-          id: script.id,
-          title: script.title,
-          hook: script.hook,
-          bodyPoints: script.body_points ?? [],
-          cta: script.cta,
-          durationSec: script.duration_sec,
-        }))
+        (payload.videoScripts ?? []).map((script, index) => {
+          const baseScript: VideoScript = {
+            id: script.id,
+            title: script.title,
+            hook: script.hook,
+            bodyPoints: script.body_points ?? [],
+            cta: script.cta,
+            durationSec: script.duration_sec,
+            twitterPost: twitterByScriptId.get(script.id),
+          }
+
+          if (index !== 0) {
+            return baseScript
+          }
+
+          return {
+            ...baseScript,
+            videoStatus: payload.enrichment?.firstScriptVideo?.status,
+            videoJobId: payload.enrichment?.firstScriptVideo?.jobId,
+            videoUrl: payload.enrichment?.firstScriptVideo?.publicUrl,
+            videoError: payload.enrichment?.firstScriptVideo?.error,
+          }
+        })
       )
       setStatusText(`Loaded run ${payload.run.id}.`)
     } catch (error) {

@@ -64,6 +64,48 @@ Topics:
 ${input.topics.map((topic, index) => `${index + 1}. ${topic.title} | ${topic.angle} | ${topic.whyNow}`).join('\n')}
 `.trim()
 
+export const buildTwitterPostsPrompt = (input: {
+  brandBrief: string
+  scripts: Array<{
+    title: string
+    hook: string
+    bodyPoints: string[]
+    cta: string
+  }>
+}) => `
+You are a social media writer for X (Twitter).
+Output strict JSON only.
+
+Schema:
+{
+  "posts": [
+    {
+      "scriptIndex": 1,
+      "text": "string"
+    }
+  ]
+}
+
+Rules:
+- Return exactly ${input.scripts.length} posts.
+- scriptIndex starts from 1 and must map 1:1 with input scripts order.
+- Each post should be concise and engaging.
+- Keep each post under 280 characters.
+- Do not use hashtags unless they are highly relevant.
+- Do not include URLs.
+
+Brand brief:
+${input.brandBrief}
+
+Scripts:
+${input.scripts
+  .map(
+    (script, index) =>
+      `${index + 1}. ${script.title}\nHook: ${script.hook}\nBody: ${script.bodyPoints.join(' | ')}\nCTA: ${script.cta}`
+  )
+  .join('\n\n')}
+`.trim()
+
 export const buildRepairPrompt = (raw: string) => `
 Return only valid JSON.
 Do not include markdown.

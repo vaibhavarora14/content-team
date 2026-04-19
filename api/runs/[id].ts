@@ -57,6 +57,7 @@ export default async function handler(request: Request): Promise<Response> {
           cta: script.cta,
           duration_sec: script.durationSec,
         })),
+        enrichment: fallbackRun.enrichment ?? null,
       })
     }
 
@@ -71,7 +72,13 @@ export default async function handler(request: Request): Promise<Response> {
       return json({ error: runError?.message ?? 'Run not found.' }, 404)
     }
 
-    const [sourceResultsResponse, sourceDocumentsResponse, topicCandidatesResponse, videoScriptsResponse] =
+    const [
+      sourceResultsResponse,
+      sourceDocumentsResponse,
+      topicCandidatesResponse,
+      videoScriptsResponse,
+      enrichmentResponse,
+    ] =
       await Promise.all([
         supabase
           .from('source_results')
@@ -85,6 +92,7 @@ export default async function handler(request: Request): Promise<Response> {
           .eq('run_id', runId)
           .order('confidence', { ascending: false }),
         supabase.from('video_scripts').select('*').eq('run_id', runId),
+        supabase.from('run_enrichments').select('*').eq('run_id', runId).maybeSingle(),
       ])
 
     const queryErrors = [
@@ -98,12 +106,29 @@ export default async function handler(request: Request): Promise<Response> {
       return json({ error: queryErrors[0]?.message ?? 'Could not load run details.' }, 500)
     }
 
+    const enrichment =
+      enrichmentResponse.error || !enrichmentResponse.data
+        ? null
+        : {
+            twitterPosts: (enrichmentResponse.data.twitter_posts_json as Array<{
+              scriptId: string
+              text: string
+            }>) ?? [],
+            firstScriptVideo: {
+              status: enrichmentResponse.data.video_status,
+              jobId: enrichmentResponse.data.video_job_id ?? undefined,
+              publicUrl: enrichmentResponse.data.video_url ?? undefined,
+              error: enrichmentResponse.data.video_error ?? undefined,
+            },
+          }
+
     return json({
       run,
       sourceResults: sourceResultsResponse.data ?? [],
       sourceDocuments: sourceDocumentsResponse.data ?? [],
       topicCandidates: topicCandidatesResponse.data ?? [],
       videoScripts: videoScriptsResponse.data ?? [],
+      enrichment,
     })
   } catch (error) {
     return json(
