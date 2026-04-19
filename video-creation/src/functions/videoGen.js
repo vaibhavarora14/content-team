@@ -61,10 +61,11 @@ async function generateVideoClips(imageUrls, skipIfCached = true) {
         input: {
           prompt: motionPrompt,
           first_frame_url: imageUrl,
+          last_frame_url: imageUrl,
           return_last_frame: false,
           generate_audio: false,
           resolution: '480p',
-          aspect_ratio: '16:9',
+          aspect_ratio: '9:16',
           duration: 5, // seconds
           web_search: false,
         },

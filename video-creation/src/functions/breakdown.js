@@ -43,6 +43,8 @@ async function generateStoryboardImages(script, skipIfCached = true) {
   const imageUrls = [];
   const imagePaths = [];
   let previousImageUrl = null;
+  const socialIconNegativePrompt =
+    'instagram logo, instagram icon, social media icon, watermark, UI overlay, app interface elements';
 
   for (let i = 0; i < visualPrompts.length; i++) {
     const prompt = visualPrompts[i];
@@ -60,7 +62,7 @@ async function generateStoryboardImages(script, skipIfCached = true) {
               guidance_scale: 2.5,
               enable_safety_checker: true,
               output_format: 'png',
-              negative_prompt: ' ',
+              negative_prompt: socialIconNegativePrompt,
               acceleration: 'none',
             },
           }
@@ -74,7 +76,7 @@ async function generateStoryboardImages(script, skipIfCached = true) {
               strength: 0.8,
               output_format: 'png',
               acceleration: 'none',
-              negative_prompt: 'blurry, ugly',
+              negative_prompt: `blurry, ugly, ${socialIconNegativePrompt}`,
               num_inference_steps: 30,
               guidance_scale: 2.5,
               enable_safety_checker: true,
