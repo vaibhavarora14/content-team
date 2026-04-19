@@ -33,7 +33,7 @@ export function GeneratePage() {
   const [scripts, setScripts] = useState<VideoScript[]>([])
   const [runId, setRunId] = useState('')
   const [steps, setSteps] = useState<RunStepState[]>(createInitialSteps)
-  const [isStepsExpanded, setIsStepsExpanded] = useState(false)
+  const [isStepsExpanded, setIsStepsExpanded] = useState(true)
   const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
   const [statusText, setStatusText] = useState('Ready')
   const [errorText, setErrorText] = useState('')
@@ -84,7 +84,7 @@ export function GeneratePage() {
     setScripts([])
     setRunId('')
     setSteps(createInitialSteps())
-    setIsStepsExpanded(false)
+    setIsStepsExpanded(true)
 
     type FlowStage = 'search' | 'scrape' | 'topics' | 'scripts' | 'enrich'
     let stage: FlowStage = 'search'
